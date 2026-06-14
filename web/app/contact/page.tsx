@@ -32,6 +32,14 @@ export default function ContactPage() {
             Open an issue to report a bug or suggest a feature.
           </div>
         </Row>
+        <Row label="Support">
+          <a href="https://ko-fi.com/danieltomaro" target="_blank" rel="noopener" style={{ color: "var(--gold)", fontWeight: 600 }}>
+            ☕ Buy me a coffee on Ko-fi
+          </a>
+          <div style={{ color: "var(--muted)", fontSize: ".85rem", marginTop: 2 }}>
+            F1Slam is free — support keeps it running and ad-light.
+          </div>
+        </Row>
       </div>
 
       <p style={{ color: "var(--muted)", fontSize: ".85rem" }}>

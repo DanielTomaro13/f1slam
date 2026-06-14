@@ -22,6 +22,15 @@ export default function SiteFooter() {
             <a href="https://nrl24-0.com" style={{ color: "var(--accent)" }}>NRL 24-0</a> ·{" "}
             <a href="https://footballinvincibles.com" style={{ color: "var(--accent)" }}>Football Invincibles</a>
           </p>
+          <a
+            href="https://ko-fi.com/danieltomaro"
+            target="_blank"
+            rel="noopener"
+            className="btn"
+            style={{ marginTop: 12, minHeight: 36, padding: "0.4rem 0.9rem", fontSize: ".82rem", borderColor: "var(--gold)", color: "var(--text)" }}
+          >
+            ☕ Support F1Slam on Ko-fi
+          </a>
         </div>
         <div style={{ display: "flex", gap: "2.5rem", marginLeft: "auto", flexWrap: "wrap" }}>
           <nav style={{ display: "grid", gap: 6, fontSize: ".85rem" }}>
@@ -43,6 +52,7 @@ export default function SiteFooter() {
             <Link href="/about">About</Link>
             <Link href="/contact">Contact</Link>
             <Link href="/privacy">Privacy</Link>
+            <a href="https://ko-fi.com/danieltomaro" target="_blank" rel="noopener">☕ Support on Ko-fi</a>
           </nav>
         </div>
       </div>
