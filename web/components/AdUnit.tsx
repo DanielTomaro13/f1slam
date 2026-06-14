@@ -40,7 +40,9 @@ export default function AdUnit({
       <ins
         ref={ref}
         className="adsbygoogle"
-        style={{ display: "block", width: "100%" }}
+        // reserve a minimum height so a filled ad shifts the page as little as
+        // possible (reduces CLS); an unfilled slot collapses on its own.
+        style={{ display: "block", width: "100%", minHeight: 100 }}
         data-ad-client={AD_CLIENT}
         data-ad-slot={slot}
         data-ad-format={format}

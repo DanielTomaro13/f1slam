@@ -63,8 +63,21 @@ export default async function DriverPage({
   const c = d.career;
   const history = serverHistory(d.id);
 
+  const personLd = {
+    "@context": "https://schema.org",
+    "@type": "Person",
+    name: d.name,
+    nationality: d.nationality,
+    jobTitle: "Formula One Driver",
+    url: `https://f1slam.com/drivers/${d.id}`,
+    ...(d.headshot ? { image: d.headshot } : {}),
+    description: `${d.name} — ${c.championships > 0 ? `${c.championships}× Formula 1 World Champion, ` : ""}${c.wins} Grand Prix wins, ${c.podiums} podiums and ${c.poles} pole positions across ${c.races} starts (${c.firstYear}–${c.lastYear}).`,
+    ...(c.championships > 0 ? { award: `${c.championships}× Formula 1 World Champion` } : {}),
+  };
+
   return (
     <div style={{ display: "grid", gap: "1.5rem" }}>
+      <JsonLd data={personLd} />
       <JsonLd
         data={breadcrumbJsonLd([
           { name: "Drivers", path: "/drivers" },

@@ -8,13 +8,14 @@ import { GAMES } from "@/lib/gamelist";
 import HomeLeaderboard from "@/components/HomeLeaderboard";
 
 export const metadata: Metadata = pageMeta({
-  title: "F1Slam — Formula 1 Stats, Standings & Mini-Games",
+  title: "F1Slam — Formula 1 History, Stats & Games",
   description:
-    "Live F1 championship standings, the full race calendar and a vault of free Formula 1 mini-games — Gridle, Higher or Lower, Guess the Driver, Pit Stop and the Grand Slam builder. Real OpenF1 data, new daily puzzles, global leaderboards, no sign-up.",
+    "The complete history of Formula 1 — every champion, driver and race winner since 1950, with standings and the calendar for all 77 seasons — plus free F1 games: the Season Simulator, Career Mode, Gridle, Higher or Lower, Guess the Driver and Pit Stop. Global leaderboards, no sign-up.",
   path: "/",
   keywords: [
-    "F1 games", "free F1 games online", "F1 standings", "guess the F1 driver",
-    "F1 wordle", "Gridle", "higher or lower F1", "F1 quiz", "Grand Slam F1",
+    "F1 games", "free F1 games online", "F1 history", "F1 champions list",
+    "F1 standings", "F1 season simulator", "guess the F1 driver", "F1 wordle",
+    "Gridle", "F1 stats", "F1 quiz", "F1 manager game",
   ],
 });
 

@@ -7,9 +7,9 @@ export const SITE = {
     process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ||
     "https://f1slam.com",
   tagline:
-    "Formula 1 stats, championship standings, the race calendar and addictive F1 mini-games — chase the perfect Grand Slam.",
+    "The complete Formula 1 history, plus stats, standings and addictive F1 games — build a team across every era and chase a perfect season.",
   description:
-    "Live F1 championship standings, the full race calendar, deep driver profiles and a vault of Formula 1 mini-games — Gridle, Higher or Lower, Guess the Driver, Pit Stop and the Grand Slam builder. Real data from every race, new daily puzzles, global leaderboards, no sign-up.",
+    "Every F1 champion, driver, race winner and circuit since 1950 — championship standings and the race calendar for all 77 seasons, plus deep driver profiles with full race-by-race history. Then play: the Season Simulator (spin a cross-era dream team and win every race), Career Mode, Gridle, Higher or Lower, Guess the Driver and Pit Stop. Global leaderboards, no sign-up.",
   twitter: "@f1slam",
 };
 

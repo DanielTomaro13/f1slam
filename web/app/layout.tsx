@@ -25,7 +25,8 @@ export const metadata: Metadata = {
   description: SITE.description,
   applicationName: SITE.name,
   keywords: [
-    "F1", "Formula 1", "F1 game", "F1 games", "Grand Slam", "Grand Chelem",
+    "F1", "Formula 1", "F1 history", "F1 champions", "F1 game", "F1 games",
+    "F1 season simulator", "F1 manager game", "Grand Slam", "Grand Chelem",
     "F1 standings", "F1 championship", "F1 calendar", "F1 drivers", "F1 stats",
     "F1 wordle", "Gridle", "guess the F1 driver", "F1 quiz", "F1 trivia",
   ],
@@ -83,6 +84,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en-GB">
       <head>
+        {/* Warm up the third-party origins we connect to (ads, headshots, analytics) */}
+        <link rel="preconnect" href="https://pagead2.googlesyndication.com" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://media.formula1.com" />
+        <link rel="dns-prefetch" href="https://media.formula1.com" />
+        <link rel="dns-prefetch" href="https://googleads.g.doubleclick.net" />
+        <link rel="dns-prefetch" href="https://static.cloudflareinsights.com" />
         {/* Google AdSense — literal loader in <head> for site verification + Auto Ads */}
         <script
           async

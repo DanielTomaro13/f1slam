@@ -129,6 +129,10 @@ h1, h2, h3 { font-family: var(--font-cond); letter-spacing: 0.01em; }
 
 a, button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 
+/* chips used as interactive controls (filters, toggles) get a comfortable iOS
+   tap target without bloating decorative chips too much */
+button.chip, a.chip { min-height: 34px; cursor: pointer; }
+
 /* ---- sister-sites strip ---- */
 .sister-bar {
   display: flex;
