@@ -16,10 +16,12 @@ export default function SiteFooter() {
         <div style={{ maxWidth: 320 }}>
           <strong style={{ color: "var(--text)" }}>{SITE.name}</strong>
           <p style={{ fontSize: ".85rem", marginTop: 6 }}>{SITE.tagline}</p>
-          <p style={{ fontSize: ".78rem", marginTop: 10 }}>
+          <p style={{ fontSize: ".78rem", marginTop: 10, lineHeight: 1.7 }}>
             Part of the 0 Series ·{" "}
             <a href="https://afl23-0.com" style={{ color: "var(--accent)" }}>AFL 23-0</a> ·{" "}
             <a href="https://nrl24-0.com" style={{ color: "var(--accent)" }}>NRL 24-0</a> ·{" "}
+            <a href="https://nba82-0.com" style={{ color: "var(--accent)" }}>NBA 82-0</a> ·{" "}
+            <a href="https://mlb162-0.com" style={{ color: "var(--accent)" }}>MLB 162-0</a> ·{" "}
             <a href="https://footballinvincibles.com" style={{ color: "var(--accent)" }}>Football Invincibles</a>
           </p>
           <a
@@ -35,8 +37,9 @@ export default function SiteFooter() {
         <div style={{ display: "flex", gap: "2.5rem", marginLeft: "auto", flexWrap: "wrap" }}>
           <nav style={{ display: "grid", gap: 6, fontSize: ".85rem" }}>
             <strong style={{ color: "var(--text)" }}>Play</strong>
-            <Link href="/games/grand-slam">Grand Slam</Link>
-            <Link href="/games">Mini-games</Link>
+            <Link href="/games/season">Season Simulator</Link>
+            <Link href="/games/career">Career Mode</Link>
+            <Link href="/games">All games</Link>
             <Link href="/leaderboard">Hall of Fame</Link>
           </nav>
           <nav style={{ display: "grid", gap: 6, fontSize: ".85rem" }}>

@@ -60,7 +60,7 @@ export async function loadGamesData(): Promise<GamesData> {
     .map(toGameDriver)
     .filter((d) => d.races >= 1)
     .sort((a, b) => b.points - a.points);
-  _cache = { drivers, season: f1.season };
+  _cache = { drivers, season: f1.currentSeason };
   return _cache;
 }
 

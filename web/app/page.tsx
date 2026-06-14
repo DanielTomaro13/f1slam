@@ -1,8 +1,8 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { pageMeta } from "@/lib/seo";
-import { serverF1, } from "@/lib/serverdata";
-import { driverTable } from "@/lib/f1";
+import { serverF1 } from "@/lib/serverdata";
+import { driverTable, calendar } from "@/lib/f1";
 import { flagEmoji, fmtDate, isPast } from "@/lib/format";
 import { GAMES } from "@/lib/gamelist";
 import HomeLeaderboard from "@/components/HomeLeaderboard";
@@ -21,14 +21,14 @@ export const metadata: Metadata = pageMeta({
 export default function Home() {
   const data = serverF1();
   const table = driverTable(data).slice(0, 5);
-  const next = data.calendar.find((r) => !isPast(r.raceDate));
-  const recent = [...data.calendar].filter((r) => r.winner).slice(-3).reverse();
+  const cal = calendar(data);
+  const next = cal.find((r) => !isPast(r.raceDate));
+  const recent = [...cal].filter((r) => r.winner).slice(-3).reverse();
 
   return (
     <div style={{ display: "grid", gap: "2.5rem" }}>
       {/* Hero */}
       <section className="card" style={{ padding: "2.5rem 1.5rem", textAlign: "center", overflow: "hidden" }}>
-        <span className="chip" style={{ marginBottom: 14 }}>🏁 {data.season} season · live OpenF1 data · global leaderboards</span>
         <h1 style={{ fontSize: "clamp(2.1rem,5.5vw,3.6rem)", lineHeight: 1.02, margin: "0 0 .6rem", fontWeight: 900, textTransform: "uppercase" }}>
           Chase the perfect <span style={{ color: "var(--accent)" }}>Grand Slam</span>.
           <br /> Master the F1 <span style={{ color: "var(--gold)" }}>vault</span>.
@@ -38,7 +38,7 @@ export default function Home() {
           climb the championship and beat a vault of daily F1 puzzles. Real data from every race.
         </p>
         <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
-          <Link href="/games/grand-slam" className="btn btn-primary">🏆 Play Grand Slam</Link>
+          <Link href="/games/season" className="btn btn-primary">🏆 Build a team</Link>
           <Link href="/games" className="btn">All games</Link>
           <Link href="/standings" className="btn">Championship</Link>
         </div>
@@ -63,7 +63,7 @@ export default function Home() {
 
       {/* Championship snapshot */}
       <section>
-        <SectionHead title={`Drivers' Championship ${data.season}`} href="/standings" cta="Full table" />
+        <SectionHead title={`Drivers' Championship ${data.currentSeason}`} href="/standings" cta="Full table" />
         <div className="card scroll-x">
           <table className="stat">
             <thead>

@@ -6,19 +6,19 @@ import { topScores, type ScoreEntry, isGlobal } from "@/lib/leaderboard";
 export default function HomeLeaderboard() {
   const [rows, setRows] = useState<ScoreEntry[] | null>(null);
   useEffect(() => {
-    topScores("grand-slam", true, 5).then(setRows);
+    topScores("season-sim", true, 5).then(setRows);
   }, []);
   return (
     <div className="card" style={{ padding: "1.1rem" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
-        <h3 style={{ margin: 0, fontSize: "1.05rem" }}>🏆 Grand Slam — top scores</h3>
+        <h3 style={{ margin: 0, fontSize: "1.05rem" }}>🏆 Season Simulator — top points</h3>
         <Link href="/leaderboard" style={{ fontSize: ".8rem", color: "var(--accent)" }}>View all →</Link>
       </div>
       {rows === null ? (
         <p style={{ color: "var(--muted)", fontSize: ".85rem" }}>Loading…</p>
       ) : rows.length === 0 ? (
         <p style={{ color: "var(--muted)", fontSize: ".85rem" }}>
-          No scores yet — <Link href="/games/grand-slam" style={{ color: "var(--accent)" }}>be the first</Link> on the board.
+          No scores yet — <Link href="/games/season" style={{ color: "var(--accent)" }}>be the first</Link> on the board.
         </p>
       ) : (
         <ol style={{ margin: 0, paddingLeft: 0, listStyle: "none", display: "grid", gap: 6 }}>

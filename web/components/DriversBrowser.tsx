@@ -13,9 +13,18 @@ const SORTS: { key: SortKey; label: string }[] = [
   { key: "races", label: "Races" },
 ];
 
+const ALL_TEAMS = "all" as const;
+
 export default function DriversBrowser({ drivers }: { drivers: Driver[] }) {
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<SortKey>("points");
+  const [team, setTeam] = useState<string>(ALL_TEAMS);
+
+  const teams = useMemo(() => {
+    const set = new Set<string>();
+    for (const d of drivers) if (d.team) set.add(d.team);
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [drivers]);
 
   const list = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -24,8 +33,9 @@ export default function DriversBrowser({ drivers }: { drivers: Driver[] }) {
         !needle ||
         `${d.firstName} ${d.lastName} ${d.team} ${d.code}`.toLowerCase().includes(needle)
       )
+      .filter((d) => team === ALL_TEAMS || d.team === team)
       .sort((a, b) => b.stats[sort] - a.stats[sort]);
-  }, [drivers, q, sort]);
+  }, [drivers, q, sort, team]);
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
@@ -52,6 +62,26 @@ export default function DriversBrowser({ drivers }: { drivers: Driver[] }) {
             </button>
           ))}
         </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 4, overflowX: "auto" }} className="scroll-x">
+        <button
+          className="chip"
+          onClick={() => setTeam(ALL_TEAMS)}
+          style={{ borderColor: team === ALL_TEAMS ? "var(--accent)" : "var(--border)", color: team === ALL_TEAMS ? "var(--accent)" : "var(--text)", whiteSpace: "nowrap" }}
+        >
+          All teams
+        </button>
+        {teams.map((t) => (
+          <button
+            key={t}
+            className="chip"
+            onClick={() => setTeam(t)}
+            style={{ borderColor: team === t ? "var(--accent)" : "var(--border)", color: team === t ? "var(--accent)" : "var(--text)", whiteSpace: "nowrap" }}
+          >
+            {t}
+          </button>
+        ))}
       </div>
 
       <div className="grid-cards">

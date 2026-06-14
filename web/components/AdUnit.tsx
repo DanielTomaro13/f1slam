@@ -16,9 +16,13 @@ export default function AdUnit({
   format?: string;
   style?: React.CSSProperties;
 }) {
+  const ref = useRef<HTMLModElement>(null);
   const pushed = useRef(false);
   useEffect(() => {
     if (!slot || pushed.current) return;
+    // Responsive AdSense units need a parent with a real width before push();
+    // pushing into a collapsed/too-narrow container throws "No slot size".
+    if (!ref.current || ref.current.offsetWidth < 120) return;
     try {
       ((window as unknown as { adsbygoogle: unknown[] }).adsbygoogle =
         (window as unknown as { adsbygoogle: unknown[] }).adsbygoogle || []).push({});
@@ -29,13 +33,14 @@ export default function AdUnit({
   if (!slot) return null;
 
   return (
-    <div style={{ margin: "1.5rem auto", textAlign: "center", ...style }}>
+    <div style={{ width: "100%", margin: "1.5rem auto", textAlign: "center", ...style }}>
       <div style={{ fontSize: ".58rem", color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 4 }}>
         Advertisement
       </div>
       <ins
+        ref={ref}
         className="adsbygoogle"
-        style={{ display: "block" }}
+        style={{ display: "block", width: "100%" }}
         data-ad-client={AD_CLIENT}
         data-ad-slot={slot}
         data-ad-format={format}

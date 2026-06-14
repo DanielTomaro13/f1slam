@@ -14,6 +14,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/standings",
     "/drivers",
     "/calendar",
+    "/tracks",
     "/stats",
     "/games",
     "/leaderboard",
@@ -34,12 +35,20 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.7,
   }));
 
-  const driverPaths = serverF1().drivers.map((d) => ({
+  const data = serverF1();
+  const driverPaths = data.drivers.map((d) => ({
     url: `${SITE.url}/drivers/${d.number}/${slugify(`${d.firstName} ${d.lastName}`)}`,
     lastModified: now,
     changeFrequency: "weekly" as const,
     priority: 0.5,
   }));
 
-  return [...staticPaths, ...gamePaths, ...driverPaths];
+  const trackPaths = Object.keys(data.tracks).map((key) => ({
+    url: `${SITE.url}/tracks/${key}`,
+    lastModified: now,
+    changeFrequency: "monthly" as const,
+    priority: 0.5,
+  }));
+
+  return [...staticPaths, ...gamePaths, ...driverPaths, ...trackPaths];
 }

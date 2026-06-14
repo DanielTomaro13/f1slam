@@ -21,7 +21,8 @@ interface ScoreEntry {
 }
 
 const GAMES: Record<string, { dir: "high" | "low"; max: number }> = {
-  "grand-slam": { dir: "high", max: 5000 },
+  "season-sim": { dir: "high", max: 1000 },
+  career: { dir: "high", max: 1000 },
   "higher-or-lower": { dir: "high", max: 5000 },
   "pit-stop": { dir: "high", max: 200 },
 };

@@ -4,7 +4,8 @@ import { topScores, isGlobal, type ScoreEntry } from "@/lib/leaderboard";
 import { getName, setName, getDaily } from "@/lib/progress";
 
 const BOARDS = [
-  { game: "grand-slam", label: "Grand Slam", unit: "pts" },
+  { game: "season-sim", label: "Season Simulator", unit: "pts" },
+  { game: "career", label: "Career Mode", unit: "pts" },
   { game: "higher-or-lower", label: "Higher or Lower", unit: "streak" },
   { game: "pit-stop", label: "Pit Stop", unit: "drivers" },
 ];

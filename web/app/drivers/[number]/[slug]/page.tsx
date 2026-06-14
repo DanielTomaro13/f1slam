@@ -6,6 +6,7 @@ import { driverTable, type Driver } from "@/lib/f1";
 import { pageMeta, breadcrumbJsonLd } from "@/lib/seo";
 import { flagEmoji, slugify } from "@/lib/format";
 import JsonLd from "@/components/JsonLd";
+import DriverRaceHistory from "@/components/DriverRaceHistory";
 
 interface Params { number: string; slug: string }
 
@@ -85,8 +86,13 @@ export default async function DriverPage({ params }: { params: Promise<Params> }
         ))}
       </section>
 
+      <section>
+        <h2 style={{ fontSize: "1.3rem", fontWeight: 800, textTransform: "uppercase", fontFamily: "var(--font-cond)" }}>Race history</h2>
+        <DriverRaceHistory races={d.byRace} driverName={name} />
+      </section>
+
       <p style={{ color: "var(--muted)", fontSize: ".85rem" }}>
-        Career figures aggregate every race {name} has started in the OpenF1 era ({data.season} and back to 2023).
+        Career figures aggregate every race {name} has started in the OpenF1 era ({data.currentSeason} and back to 2023).
         Want a challenge? <Link href="/games/guess-the-driver" style={{ color: "var(--accent)" }}>Guess the Driver</Link> or
         test your knowledge in <Link href="/games/higher-or-lower" style={{ color: "var(--accent)" }}>Higher or Lower</Link>.
       </p>

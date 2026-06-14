@@ -1,12 +1,13 @@
 import Link from "next/link";
 
 const NAV = [
-  { href: "/grand-slams", label: "Grand Slams" },
   { href: "/games", label: "Games" },
   { href: "/standings", label: "Standings" },
   { href: "/drivers", label: "Drivers" },
   { href: "/calendar", label: "Calendar" },
+  { href: "/tracks", label: "Tracks" },
   { href: "/stats", label: "Stats" },
+  { href: "/grand-slams", label: "Grand Slams" },
   { href: "/leaderboard", label: "Hall of Fame" },
 ];
 
