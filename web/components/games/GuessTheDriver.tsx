@@ -9,12 +9,12 @@ const GAME = "guess-the-driver";
 
 function clues(d: GameDriver): { label: string; value: string }[] {
   return [
-    { label: "Team", value: d.team },
+    { label: "Latest team", value: d.team },
     { label: "Nationality", value: `${d.flag} ${d.country ?? "Unknown"}` },
-    { label: "Career races", value: String(d.races) },
-    { label: "Car number", value: `#${d.id}` },
+    { label: "Era", value: `${d.firstYear}–${d.lastYear}` },
+    { label: "Seasons raced", value: String(d.seasons) },
     { label: "Pole positions", value: String(d.poles) },
-    { label: "Career podiums", value: String(d.podiums) },
+    { label: "World titles", value: String(d.championships) },
     { label: "Career wins", value: String(d.wins) },
   ];
 }
@@ -24,20 +24,20 @@ export default function GuessTheDriver() {
   const [target, setTarget] = useState<GameDriver | null>(null);
   const [options, setOptions] = useState<GameDriver[]>([]);
   const [revealed, setRevealed] = useState(1);
-  const [wrong, setWrong] = useState<Set<number>>(new Set());
+  const [wrong, setWrong] = useState<Set<string>>(new Set());
   const [result, setResult] = useState<"win" | "lose" | null>(null);
   const [tick, setTick] = useState("");
 
   useEffect(() => {
     loadGamesData().then((d) => {
-      const eligible = d.drivers.filter((x) => x.races >= 3);
-      const usable = eligible.length >= 4 ? eligible : d.drivers;
+      const eligible = d.players.filter((x) => x.wins >= 2 || x.championships >= 1);
+      const usable = eligible.length >= 4 ? eligible : d.players.slice(0, 120);
       const r = rng(dailySeed() * 0x9e3779b1);
       const t = usable[Math.floor(r() * usable.length)];
       // 3 distractors, stable for the day
       const others = usable.filter((x) => x.id !== t.id);
       const picks: GameDriver[] = [];
-      const seen = new Set<number>();
+      const seen = new Set<string>();
       while (picks.length < 3 && picks.length < others.length) {
         const c = others[Math.floor(r() * others.length)];
         if (!seen.has(c.id)) { seen.add(c.id); picks.push(c); }

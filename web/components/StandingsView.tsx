@@ -2,19 +2,21 @@
 import { useState } from "react";
 import Link from "next/link";
 import type { F1Data } from "@/lib/f1";
-import { driverTable, constructorTable, teamColour } from "@/lib/f1";
-import { flagEmoji, slugify } from "@/lib/format";
+import { driverStandings, constructorStandings, driverHref } from "@/lib/f1";
 
 export default function StandingsView({ data }: { data: F1Data }) {
   const [season, setSeason] = useState<number>(data.currentSeason);
 
-  const drivers = driverTable(data, season);
-  const teams = constructorTable(data, season);
+  const drivers = driverStandings(data, season);
+  const teams = constructorStandings(data, season);
   const empty = drivers.length === 0 && teams.length === 0;
 
   return (
     <div style={{ display: "grid", gap: "2rem" }}>
-      <div className="scroll-x" style={{ display: "flex", gap: 6, overflowX: "auto" }}>
+      <div
+        className="scroll-x"
+        style={{ display: "flex", gap: 6, overflowX: "auto", whiteSpace: "nowrap" }}
+      >
         {data.seasons.map((y) => (
           <button
             key={y}
@@ -34,60 +36,94 @@ export default function StandingsView({ data }: { data: F1Data }) {
 
       {empty ? (
         <div className="card" style={{ padding: "1.2rem", color: "var(--muted)" }}>
-          No standings for {season} yet — they appear after the first race.
+          No standings for {season}.
         </div>
       ) : (
         <>
           <section>
-            <h2 style={{ fontSize: "1.3rem", fontWeight: 800, textTransform: "uppercase", fontFamily: "var(--font-cond)" }}>Drivers</h2>
+            <h2
+              style={{
+                fontSize: "1.3rem",
+                fontWeight: 800,
+                textTransform: "uppercase",
+                fontFamily: "var(--font-cond)",
+              }}
+            >
+              Drivers
+            </h2>
             <div className="card scroll-x">
               <table className="stat">
                 <thead>
-                  <tr><th>#</th><th>Driver</th><th>Team</th><th>Wins</th><th>Podiums</th><th>Pts</th></tr>
+                  <tr>
+                    <th>#</th>
+                    <th>Driver</th>
+                    <th>Team</th>
+                    <th>Wins</th>
+                    <th>Pts</th>
+                  </tr>
                 </thead>
                 <tbody>
-                  {drivers.map((e) => {
-                    const races = e.driver?.byRace.filter((r) => r.season === season) ?? [];
-                    const wins = races.filter((r) => r.position === 1).length;
-                    const podiums = races.filter((r) => r.position != null && r.position <= 3).length;
-                    return (
-                      <tr key={e.number}>
-                        <td style={{ fontFamily: "var(--font-mono)" }}>{e.position}</td>
-                        <td style={{ fontWeight: 700 }}>
-                          {e.driver ? (
-                            <Link href={`/drivers/${e.number}/${slugify(`${e.driver.firstName} ${e.driver.lastName}`)}`}>
-                              <span style={{ color: e.driver.teamColour }}>▍</span> {flagEmoji(e.driver.country)} {e.driver.firstName} {e.driver.lastName}
-                            </Link>
-                          ) : `#${e.number}`}
-                        </td>
-                        <td style={{ color: "var(--muted)" }}>{e.driver?.team ?? "—"}</td>
-                        <td style={{ fontFamily: "var(--font-mono)" }}>{wins}</td>
-                        <td style={{ fontFamily: "var(--font-mono)" }}>{podiums}</td>
-                        <td style={{ fontFamily: "var(--font-cond)", color: "var(--gold)", fontWeight: 700 }}>{e.points}</td>
-                      </tr>
-                    );
-                  })}
+                  {drivers.map((row) => (
+                    <tr key={row.driverId}>
+                      <td style={{ fontFamily: "var(--font-mono)" }}>{row.position}</td>
+                      <td style={{ fontWeight: 700 }}>
+                        <Link href={driverHref(row.driverId)}>
+                          <span style={{ color: row.teamColour }}>▍</span> {row.flag} {row.name}
+                        </Link>
+                      </td>
+                      <td style={{ color: "var(--muted)" }}>{row.team || "—"}</td>
+                      <td style={{ fontFamily: "var(--font-mono)" }}>{row.wins}</td>
+                      <td style={{ fontFamily: "var(--font-cond)", color: "var(--gold)", fontWeight: 700 }}>
+                        {row.points}
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
           </section>
 
           <section>
-            <h2 style={{ fontSize: "1.3rem", fontWeight: 800, textTransform: "uppercase", fontFamily: "var(--font-cond)" }}>Constructors</h2>
+            <h2
+              style={{
+                fontSize: "1.3rem",
+                fontWeight: 800,
+                textTransform: "uppercase",
+                fontFamily: "var(--font-cond)",
+              }}
+            >
+              Constructors
+            </h2>
             <div className="card scroll-x">
               <table className="stat">
                 <thead>
-                  <tr><th>#</th><th>Team</th><th>Points</th></tr>
+                  <tr>
+                    <th>#</th>
+                    <th>Team</th>
+                    <th>Wins</th>
+                    <th>Pts</th>
+                  </tr>
                 </thead>
                 <tbody>
                   {teams.map((t) => (
-                    <tr key={t.team}>
+                    <tr key={t.id}>
                       <td style={{ fontFamily: "var(--font-mono)" }}>{t.position}</td>
-                      <td style={{ fontWeight: 700 }}><span style={{ color: teamColour(data, t.team) }}>▍</span> {t.team}</td>
-                      <td style={{ fontFamily: "var(--font-cond)", color: "var(--gold)", fontWeight: 700 }}>{t.points}</td>
+                      <td style={{ fontWeight: 700 }}>
+                        <span style={{ color: t.colour }}>▍</span> {t.name}
+                      </td>
+                      <td style={{ fontFamily: "var(--font-mono)" }}>{t.wins}</td>
+                      <td style={{ fontFamily: "var(--font-cond)", color: "var(--gold)", fontWeight: 700 }}>
+                        {t.points}
+                      </td>
                     </tr>
                   ))}
-                  {teams.length === 0 && <tr><td colSpan={3} style={{ color: "var(--muted)" }}>No constructor standings for {season}.</td></tr>}
+                  {teams.length === 0 && (
+                    <tr>
+                      <td colSpan={4} style={{ color: "var(--muted)" }}>
+                        No constructor standings for {season}.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>

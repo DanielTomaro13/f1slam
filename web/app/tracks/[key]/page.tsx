@@ -2,9 +2,8 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { serverF1 } from "@/lib/serverdata";
-import type { Driver } from "@/lib/f1";
 import { pageMeta, breadcrumbJsonLd } from "@/lib/seo";
-import { flagEmoji, slugify } from "@/lib/format";
+import { flagEmoji } from "@/lib/format";
 import JsonLd from "@/components/JsonLd";
 import TrackMap from "@/components/TrackMap";
 
@@ -40,16 +39,9 @@ export async function generateMetadata({
 
 interface WinnerRow {
   season: number;
-  grandPrix: string;
+  raceName: string;
   winner: string;
-}
-
-interface FormRow {
-  driver: Driver;
-  starts: number;
-  wins: number;
-  points: number;
-  best: number | null;
+  winnerName: string | null;
 }
 
 export default async function TrackPage({
@@ -62,36 +54,28 @@ export default async function TrackPage({
   const track = data.tracks[key];
   if (!track) notFound();
 
-  // Winners at this circuit, across every season.
+  // Winners at this circuit, scanned across every season.
+  const trackName = track.name.toLowerCase();
   const winners: WinnerRow[] = [];
   for (const [season, rounds] of Object.entries(data.calendars)) {
     for (const round of rounds) {
-      if (round.circuitKey === track.key && round.winner) {
+      const matches =
+        round.circuitKey === track.key ||
+        (!!round.circuit &&
+          !!track.name &&
+          round.circuit.toLowerCase().includes(trackName));
+      if (matches && round.winner) {
         winners.push({
           season: Number(season),
-          grandPrix: round.name,
+          raceName: round.name,
           winner: round.winner,
+          winnerName: round.winnerName,
         });
       }
     }
   }
   winners.sort((a, b) => b.season - a.season);
-
-  // Track form — drivers ranked by success at this circuit.
-  const form: FormRow[] = [];
-  for (const driver of data.drivers) {
-    const here = driver.byRace.filter((r) => r.circuitKey === track.key);
-    if (here.length === 0) continue;
-    const wins = here.filter((r) => r.position === 1).length;
-    const points = here.reduce((s, r) => s + (r.points || 0), 0);
-    const finishes = here
-      .map((r) => r.position)
-      .filter((p): p is number => p != null);
-    const best = finishes.length ? Math.min(...finishes) : null;
-    form.push({ driver, starts: here.length, wins, points, best });
-  }
-  form.sort((a, b) => b.wins - a.wins || b.points - a.points);
-  const topForm = form.slice(0, 6);
+  const winnerRows = winners.slice(0, 40);
 
   return (
     <div style={{ display: "grid", gap: "1.5rem" }}>
@@ -127,18 +111,18 @@ export default async function TrackPage({
         <TrackMap track={track} height={320} animate lapSeconds={7} />
       </section>
 
-      {winners.length > 0 && (
-        <section>
-          <h2
-            style={{
-              fontSize: "1.3rem",
-              fontWeight: 800,
-              textTransform: "uppercase",
-              fontFamily: "var(--font-cond)",
-            }}
-          >
-            Winners at this circuit
-          </h2>
+      <section>
+        <h2
+          style={{
+            fontSize: "1.3rem",
+            fontWeight: 800,
+            textTransform: "uppercase",
+            fontFamily: "var(--font-cond)",
+          }}
+        >
+          Winners at this circuit
+        </h2>
+        {winnerRows.length > 0 ? (
           <div className="card scroll-x" style={{ padding: "0.25rem" }}>
             <table className="stat">
               <thead>
@@ -149,71 +133,24 @@ export default async function TrackPage({
                 </tr>
               </thead>
               <tbody>
-                {winners.map((w, i) => (
+                {winnerRows.map((w, i) => (
                   <tr key={`${w.season}-${i}`}>
                     <td style={{ fontFamily: "var(--font-mono)" }}>{w.season}</td>
-                    <td>{w.grandPrix}</td>
-                    <td style={{ color: "var(--gold)", fontWeight: 700 }}>{w.winner}</td>
+                    <td>{w.raceName}</td>
+                    <td style={{ color: "var(--gold)", fontWeight: 700 }}>
+                      {w.winnerName || w.winner}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </section>
-      )}
-
-      {topForm.length > 0 && (
-        <section>
-          <h2
-            style={{
-              fontSize: "1.3rem",
-              fontWeight: 800,
-              textTransform: "uppercase",
-              fontFamily: "var(--font-cond)",
-            }}
-          >
-            Most successful here
-          </h2>
-          <div className="card scroll-x" style={{ padding: "0.25rem" }}>
-            <table className="stat">
-              <thead>
-                <tr>
-                  <th>Driver</th>
-                  <th>Starts</th>
-                  <th>Wins</th>
-                  <th>Best</th>
-                  <th>Points</th>
-                </tr>
-              </thead>
-              <tbody>
-                {topForm.map((row) => {
-                  const name = `${row.driver.firstName} ${row.driver.lastName}`;
-                  return (
-                    <tr key={row.driver.number}>
-                      <td>
-                        <Link
-                          href={`/drivers/${row.driver.number}/${slugify(name)}`}
-                          style={{ color: "var(--text)", fontWeight: 700, textDecoration: "none" }}
-                        >
-                          {flagEmoji(row.driver.country)} {name}
-                        </Link>
-                      </td>
-                      <td style={{ fontFamily: "var(--font-mono)" }}>{row.starts}</td>
-                      <td style={{ fontFamily: "var(--font-mono)" }}>{row.wins}</td>
-                      <td style={{ fontFamily: "var(--font-mono)" }}>
-                        {row.best != null ? `P${row.best}` : "—"}
-                      </td>
-                      <td style={{ fontFamily: "var(--font-mono)", color: "var(--gold)" }}>
-                        {row.points}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
+        ) : (
+          <p style={{ color: "var(--muted)" }}>
+            No past winners recorded for this circuit.
+          </p>
+        )}
+      </section>
     </div>
   );
 }

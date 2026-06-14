@@ -2,18 +2,20 @@
 /**
  * F1Slam — data pipeline
  * ----------------------
- * Builds the full multi-season Formula 1 dataset from the public OpenF1 REST API
- * (https://openf1.org — no auth, data 2023→) plus circuit geometry from the
- * MultiViewer API (track maps).
+ * Combines two public sources into one static dataset (web/public/data/f1.json):
+ *   • Jolpica/Ergast (api.jolpi.ca) — the COMPLETE F1 record, 1950→ : every
+ *     season's driver & constructor standings, race winners and pole-sitters.
+ *   • OpenF1 + MultiViewer — current-era extras: circuit map geometry (track
+ *     maps) and driver headshots.
  *
- * Output (web/public/data/f1.json):
- *   - drivers[]      identity + career stats + race-by-race history (byRace[])
- *   - standings{}    per-season drivers' + constructors' championship
- *   - calendars{}    per-season race calendar with winners
- *   - tracks{}       per-circuit map geometry (x/y polyline, corners, rotation)
+ * Output:
+ *   drivers[]       identity + career totals + per-season line (bySeason)
+ *   constructors[]  identity + career totals + per-season strength
+ *   standings{}     per-season drivers' + constructors' championship (all years)
+ *   calendars{}     per-season race calendar with winners (all years)
+ *   tracks{}        current-era circuit maps
  *
- * Usage:  node pipeline/build-data.mjs [latestYear]
- * Re-runnable, gently paced. Best-effort: a failed feed never aborts the run.
+ * Re-runnable, gently paced, best-effort.
  */
 import { writeFileSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -21,281 +23,257 @@ import { dirname, join } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUT_DIR = join(__dirname, "..", "web", "public", "data");
-const API = "https://api.openf1.org/v1";
+const ERG = "https://api.jolpi.ca/ergast/f1";
+const OF1 = "https://api.openf1.org/v1";
 const MV = "https://api.multiviewer.app/api/v1";
 
-const HISTORY_YEARS = [2023, 2024, 2025, 2026];
-
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-let calls = 0;
-let lastCall = 0;
-const PACE_MS = 350;
-
-async function get(url, { retries = 8, base = API } = {}) {
-  const full = base + url;
-  for (let attempt = 0; attempt <= retries; attempt++) {
+let calls = 0, lastCall = 0;
+const PACE = 320;
+async function get(url, { retries = 7 } = {}) {
+  for (let a = 0; a <= retries; a++) {
     const since = Date.now() - lastCall;
-    if (since < PACE_MS) await sleep(PACE_MS - since);
+    if (since < PACE) await sleep(PACE - since);
     lastCall = Date.now();
     try {
-      const res = await fetch(full, { headers: { accept: "application/json" } });
+      const res = await fetch(url, { headers: { accept: "application/json" } });
       calls++;
-      if (res.status === 429) {
-        await sleep(3000 * (attempt + 1));
-        continue;
-      }
+      if (res.status === 429) { await sleep(3000 * (a + 1)); continue; }
       if (res.ok) return res.json();
-      if (res.status === 404) return [];
-    } catch {
-      /* retry */
-    }
-    await sleep(1000 * (attempt + 1));
+      if (res.status === 404) return null;
+    } catch { /* retry */ }
+    await sleep(1000 * (a + 1));
   }
-  console.warn(`  ! giving up on ${full}`);
+  console.warn(`  ! gave up: ${url}`);
   return null;
 }
 
-const isPodium = (p) => p != null && p <= 3;
-const idKey = (d) =>
-  (d.full_name || `${d.first_name} ${d.last_name}` || `#${d.driver_number}`)
-    .toUpperCase()
-    .replace(/[^A-Z]/g, "");
-const blank = () => ({ races: 0, wins: 0, podiums: 0, points: 0, dnf: 0, best: 99, poles: 0 });
-
-async function detectLatestYear() {
-  try {
-    const latest = await get(`/sessions?session_key=latest`);
-    if (latest?.[0]?.year) return latest[0].year;
-  } catch {}
-  return HISTORY_YEARS[HISTORY_YEARS.length - 1];
+// ---- helpers ----------------------------------------------------------------
+const DEMONYM = {
+  British: "GB", German: "DE", Italian: "IT", French: "FR", Spanish: "ES", Dutch: "NL",
+  Brazilian: "BR", Finnish: "FI", Austrian: "AT", Australian: "AU", Mexican: "MX",
+  Canadian: "CA", Belgian: "BE", Argentine: "AR", Argentinian: "AR", American: "US",
+  Swiss: "CH", Swedish: "SE", Japanese: "JP", Monegasque: "MC", "New Zealander": "NZ",
+  Danish: "DK", Polish: "PL", Russian: "RU", Thai: "TH", Indian: "IN", Indonesian: "ID",
+  Portuguese: "PT", "South African": "ZA", Irish: "IE", Czech: "CZ", Hungarian: "HU",
+  Venezuelan: "VE", Colombian: "CO", Chinese: "CN", Liechtensteiner: "LI", Malaysian: "MY",
+  Chilean: "CL", Uruguayan: "UY", "East German": "DE", Rhodesian: "ZW", "Soviet": "RU",
+  Saudi: "SA", Emirati: "AE", Qatari: "QA", Azerbaijani: "AZ", Turkish: "TR", Korean: "KR",
+};
+function flag(nat) {
+  const cc = DEMONYM[nat];
+  if (!cc) return "🏁";
+  const A = 0x1f1e6;
+  return String.fromCodePoint(A + cc.charCodeAt(0) - 65, A + cc.charCodeAt(1) - 65);
 }
+const iso3 = { GB: "GBR", DE: "GER", IT: "ITA", FR: "FRA", ES: "ESP", NL: "NED", BR: "BRA", FI: "FIN", AT: "AUT", AU: "AUS", MX: "MEX", CA: "CAN", BE: "BEL", AR: "ARG", US: "USA", CH: "SUI", SE: "SWE", JP: "JPN", MC: "MON", NZ: "NZL", DK: "DEN", PL: "POL", RU: "RUS", TH: "THA", IN: "IND", ID: "IDN", PT: "POR", ZA: "ZAF", IE: "IRL", CZ: "CZE", HU: "HUN", VE: "VEN", CO: "COL", CN: "CHN", MY: "MYS", CL: "CHL", UY: "URY", SA: "KSA", AE: "UAE", QA: "QAT", AZ: "AZE", TR: "TUR", KR: "KOR" };
+const natCountry = (nat) => iso3[DEMONYM[nat]] || null;
 
-/** number→identity map for a whole season (numbers are stable within a season). */
-async function seasonDrivers(races, names) {
-  const numToId = new Map();
-  for (const race of races) {
-    const drivers = await get(`/drivers?session_key=${race.session_key}`);
-    if (!drivers || drivers.length === 0) continue;
-    for (const d of drivers) {
-      const key = idKey(d);
-      numToId.set(d.driver_number, key);
-      const prev = names.get(key) || {};
-      names.set(key, {
-        number: d.driver_number,
-        code: d.name_acronym,
-        firstName: d.first_name,
-        lastName: d.last_name,
-        fullName: d.full_name,
-        team: d.team_name,
-        teamColour: d.team_colour ? `#${d.team_colour}` : prev.teamColour || "#888888",
-        country: d.country_code || prev.country || null,
-        headshot: d.headshot_url || prev.headshot || null,
-      });
-    }
-    break;
-  }
-  return numToId;
+const TEAM_COLOURS = {
+  ferrari: "#DC0000", mercedes: "#27F4D2", mclaren: "#FF8000", red_bull: "#3671C6",
+  williams: "#37BEDD", alpine: "#0093CC", renault: "#FFD800", aston_martin: "#229971",
+  haas: "#B6BABD", rb: "#6692FF", alphatauri: "#5E8FAA", toro_rosso: "#469BFF",
+  sauber: "#52E252", alfa: "#900000", racing_point: "#F596C8", force_india: "#F596C8",
+  lotus_f1: "#FFB800", lotus_racing: "#FFB800", team_lotus: "#FFB800", brabham: "#1E5128",
+  tyrrell: "#0033A0", benetton: "#00A551", jordan: "#FAE100", bmw_sauber: "#293276",
+  jaguar: "#0A3B26", honda: "#CC0000", toyota: "#CC0000", bar: "#E2001A", stewart: "#FFFFFF",
+  minardi: "#000000", arrows: "#FA9E00", ligier: "#0033A0", march: "#E2001A", cooper: "#005F2E",
+  maserati: "#1A2A6C", vanwall: "#005C29", brm: "#005C29", matra: "#0033A0", wolf: "#1A1A1A",
+  shadow: "#1A1A1A", lola: "#E2001A", prost: "#0033A0", jaguar_racing: "#0A3B26", caterham: "#005030", marussia: "#6E0000", virgin: "#C0001A", manor: "#E2001A", super_aguri: "#E2001A", spyker: "#FF6600", midland: "#E2001A", alpha_tauri: "#5E8FAA",
+};
+function hashColour(s) {
+  let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return `hsl(${h % 360} 55% 52%)`;
 }
+const teamColour = (id) => TEAM_COLOURS[id] || hashColour(id);
 
-/** Build meeting_key → round/circuit info for a season (ex-testing, ordered). */
-function meetingIndex(meetings) {
-  const idx = new Map();
-  let round = 0;
-  const ordered = (meetings || [])
-    .filter((m) => !/testing/i.test(m.meeting_name))
-    .sort((a, b) => new Date(a.date_start) - new Date(b.date_start));
-  for (const m of ordered) {
-    round++;
-    idx.set(m.meeting_key, {
-      round,
-      name: m.meeting_name,
-      official: m.meeting_official_name,
-      country: m.country_name,
-      countryCode: m.country_code,
-      circuitKey: m.circuit_key,
-      circuit: m.circuit_short_name,
-      location: m.location,
-      image: m.circuit_image || null,
-      date: m.date_start,
-    });
-  }
-  return { idx, ordered };
+// ---- Ergast pulls -----------------------------------------------------------
+function listFrom(d, table, list) {
+  return d?.MRData?.[table]?.StandingsLists?.[0]?.[list] || [];
 }
 
 async function main() {
-  const year = Number(process.argv[2]) || (await detectLatestYear());
-  console.log(`Building F1Slam dataset — latest season ${year}`);
+  console.log("Building F1Slam dataset — full history via Jolpica/Ergast");
   mkdirSync(OUT_DIR, { recursive: true });
 
-  const agg = new Map();         // idKey -> career totals
-  const names = new Map();       // idKey -> identity
-  const byRace = new Map();      // idKey -> [{season, round, ...}]
-  const standings = {};          // year -> {drivers, constructors}
-  const calendars = {};          // year -> [rounds]
-  const circuitKeys = new Set();
-  const circuitMeta = new Map(); // circuitKey -> {name, country, countryCode, location, image}
+  const seasonsData = await get(`${ERG}/seasons.json?limit=100`);
+  const years = (seasonsData?.MRData?.SeasonTable?.Seasons || []).map((s) => Number(s.season)).sort((a, b) => b - a);
+  const currentSeason = years[0];
+  console.log(`  ${years.length} seasons: ${years[years.length - 1]}–${currentSeason}`);
 
-  const years = HISTORY_YEARS.filter((y) => y <= year);
+  const drivers = new Map();      // driverId -> identity + bySeason[]
+  const constructors = new Map(); // constructorId -> identity + bySeason[]
+  const standings = {};
+  const calendars = {};
 
-  for (const y of years) {
-    const meetings = await get(`/meetings?year=${y}`);
-    const { idx } = meetingIndex(meetings);
-    const races = await get(`/sessions?year=${y}&session_name=Race`);
-    if (!Array.isArray(races)) { console.log(`  ${y}: no races`); continue; }
-    const raceByMeeting = new Map();
-    for (const r of races) raceByMeeting.set(r.meeting_key, r);
+  for (const year of years) {
+    const y = String(year);
+    // driver standings
+    const ds = listFrom(await get(`${ERG}/${y}/driverStandings.json?limit=100`), "StandingsTable", "DriverStandings");
+    // constructor standings
+    const cs = listFrom(await get(`${ERG}/${y}/constructorStandings.json?limit=100`), "StandingsTable", "ConstructorStandings");
+    // winners + poles
+    const winRaces = (await get(`${ERG}/${y}/results/1.json?limit=100`))?.MRData?.RaceTable?.Races || [];
+    const poleRaces = (await get(`${ERG}/${y}/qualifying/1.json?limit=100`))?.MRData?.RaceTable?.Races || [];
 
-    const done = races.filter((r) => new Date(r.date_end || r.date_start).getTime() < Date.now());
-    const numToId = await seasonDrivers(done.length ? done : races, names);
-
-    const qualis = await get(`/sessions?year=${y}&session_name=Qualifying`);
-    const qByMeeting = new Map();
-    for (const q of qualis || []) qByMeeting.set(q.meeting_key, q.session_key);
-
-    // race-by-race aggregation
-    let counted = 0;
-    const winners = new Map(); // meeting_key -> winner code
-    for (const race of done) {
-      const m = idx.get(race.meeting_key);
-      if (m?.circuitKey) {
-        circuitKeys.add(m.circuitKey);
-        if (!circuitMeta.has(m.circuitKey))
-          circuitMeta.set(m.circuitKey, {
-            name: m.circuit, country: m.country, countryCode: m.countryCode,
-            location: m.location, image: m.image,
-          });
-      }
-      const results = await get(`/session_result?session_key=${race.session_key}`);
-      if (!Array.isArray(results) || results.length === 0) continue;
-      counted++;
-      for (const r of results) {
-        const key = numToId.get(r.driver_number);
-        if (!key) continue;
-        const a = agg.get(key) || blank();
-        a.races++;
-        a.points += Number(r.points || 0);
-        if (r.dnf || r.dns || r.dsq) a.dnf++;
-        if (r.position === 1) { a.wins++; if (m) winners.set(race.meeting_key, names.get(key)?.code); }
-        if (isPodium(r.position)) a.podiums++;
-        if (r.position != null && r.position < a.best) a.best = r.position;
-        agg.set(key, a);
-        // per-race history row
-        const list = byRace.get(key) || [];
-        list.push({
-          season: y,
-          round: m?.round ?? null,
-          race: m?.name ?? null,
-          country: m?.country ?? null,
-          countryCode: m?.countryCode ?? null,
-          circuitKey: m?.circuitKey ?? null,
-          date: m?.date ?? race.date_start,
-          position: r.position ?? null,
-          points: Number(r.points || 0),
-          dnf: !!(r.dnf || r.dns || r.dsq),
-        });
-        byRace.set(key, list);
-      }
-      const qKey = qByMeeting.get(race.meeting_key);
-      if (qKey) {
-        const qres = await get(`/session_result?session_key=${qKey}`);
-        const pole = (qres || []).find((r) => r.position === 1);
-        const key = pole && numToId.get(pole.driver_number);
-        if (key) { const a = agg.get(key) || blank(); a.poles++; agg.set(key, a); }
-      }
+    // per-season pole counts by driverId
+    const poleCount = new Map();
+    for (const r of poleRaces) {
+      const id = r.QualifyingResults?.[0]?.Driver?.driverId;
+      if (id) poleCount.set(id, (poleCount.get(id) || 0) + 1);
     }
-    console.log(`  ${y}: ${counted} races`);
 
-    // calendar for the season (all meetings incl. upcoming)
-    calendars[y] = (idx.size ? [...idx.entries()] : [])
-      .map(([mk, m]) => {
-        const race = raceByMeeting.get(mk);
-        return {
-          round: m.round, meetingKey: mk, name: m.name, official: m.official,
-          country: m.country, countryCode: m.countryCode, circuit: m.circuit,
-          circuitKey: m.circuitKey, location: m.location, image: m.image,
-          date: m.date, raceDate: race?.date_start || m.date,
-          sessionKey: race?.session_key || null, winner: winners.get(mk) || null,
-        };
-      })
-      .sort((a, b) => a.round - b.round);
+    const maxDpts = Math.max(1, ...ds.map((x) => Number(x.points)));
+    const maxCpts = Math.max(1, ...cs.map((x) => Number(x.points)));
 
-    // championship standings at the last completed race
-    const lastDone = [...done].sort((a, b) => new Date(a.date_start) - new Date(b.date_start)).pop();
-    if (lastDone) {
-      const cd = await get(`/championship_drivers?session_key=${lastDone.session_key}`);
-      const ct = await get(`/championship_teams?session_key=${lastDone.session_key}`);
-      standings[y] = {
-        drivers: (cd || []).map((r) => ({ number: r.driver_number, points: r.points_current ?? 0, position: r.position_current ?? 99 })).sort((a, b) => a.position - b.position),
-        constructors: (ct || []).map((r) => ({ team: r.team_name, points: r.points_current ?? 0, position: r.position_current ?? 99 })).sort((a, b) => a.position - b.position),
-      };
+    // drivers this season
+    const dRows = [];
+    for (const row of ds) {
+      const d = row.Driver, con = row.Constructors?.[row.Constructors.length - 1];
+      const id = d.driverId;
+      const conId = con?.constructorId || "";
+      const pts = Number(row.points), wins = Number(row.wins), pos = Number(row.position);
+      const poles = poleCount.get(id) || 0;
+      const rating = Math.round(Math.min(99, 58 + (pts / maxDpts) * 28 + wins * 1.4 + (pos === 1 ? 8 : 0) + Math.min(6, poles)));
+      const colour = teamColour(conId);
+      if (!drivers.has(id)) drivers.set(id, {
+        id, code: d.code || d.familyName.slice(0, 3).toUpperCase(), first: d.givenName, last: d.familyName,
+        name: `${d.givenName} ${d.familyName}`, nationality: d.nationality, country: natCountry(d.nationality),
+        flag: flag(d.nationality), headshot: null, bySeason: [],
+      });
+      drivers.get(id).bySeason.push({ year, team: con?.name || "—", teamColour: colour, points: pts, wins, poles, position: pos, rating });
+      dRows.push({ driverId: id, code: drivers.get(id).code, name: drivers.get(id).name, flag: drivers.get(id).flag, team: con?.name || "—", teamColour: colour, points: pts, wins, position: pos });
     }
-  }
 
-  // track maps from MultiViewer (one per unique circuit)
-  const tracks = {};
-  for (const ck of circuitKeys) {
-    const meta = circuitMeta.get(ck) || {};
-    let map = null;
-    for (const y of [...years].reverse()) {
-      const data = await get(`/circuits/${ck}/${y}`, { base: MV, retries: 2 });
-      if (data && Array.isArray(data.x) && data.x.length > 10) { map = data; break; }
+    // constructors this season
+    const cRows = [];
+    for (const row of cs) {
+      const c = row.Constructor, id = c.constructorId;
+      const pts = Number(row.points), wins = Number(row.wins), pos = Number(row.position);
+      const strength = Math.round(Math.min(99, 45 + (pts / maxCpts) * 46 + (pos === 1 ? 8 : 0)));
+      const colour = teamColour(id);
+      if (!constructors.has(id)) constructors.set(id, {
+        id, name: c.name, colour, nationality: c.nationality, country: natCountry(c.nationality), flag: flag(c.nationality), bySeason: [],
+      });
+      constructors.get(id).bySeason.push({ year, points: pts, wins, position: pos, strength });
+      cRows.push({ id, name: c.name, colour, points: pts, wins, position: pos, strength });
     }
-    if (map) {
-      // downsample the ~700-point polyline to ~180 points to keep the file lean
-      const step = Math.max(1, Math.floor(map.x.length / 180));
-      const x = [], y = [];
-      for (let i = 0; i < map.x.length; i += step) { x.push(map.x[i]); y.push(map.y[i]); }
-      tracks[ck] = {
-        key: ck, name: map.circuitName || meta.name, country: meta.country,
-        countryCode: meta.countryCode, location: meta.location, image: meta.image,
-        rotation: map.rotation || 0, x, y,
-        corners: (map.corners || []).map((c) => ({ n: c.number, x: c.trackPosition?.x, y: c.trackPosition?.y })),
-      };
-    } else {
-      tracks[ck] = { key: ck, name: meta.name, country: meta.country, countryCode: meta.countryCode, location: meta.location, image: meta.image, rotation: 0, x: [], y: [], corners: [] };
-    }
-  }
-  console.log(`  tracks: ${Object.keys(tracks).length}`);
 
-  // assemble drivers
-  const drivers = [...names.entries()]
-    .map(([key, d]) => {
-      const a = agg.get(key) || {};
-      const races = (byRace.get(key) || []).sort((p, q) => (q.season - p.season) || (q.round - p.round));
+    standings[y] = { drivers: dRows, constructors: cRows };
+
+    // calendar (winners). circuitKey unknown here (added for current season from OpenF1 below)
+    calendars[y] = winRaces.map((r) => {
+      const w = r.Results?.[0];
       return {
-        ...d,
-        stats: {
-          races: a.races || 0, wins: a.wins || 0, podiums: a.podiums || 0,
-          poles: a.poles || 0, points: Math.round((a.points || 0) * 10) / 10,
-          dnf: a.dnf || 0, bestFinish: a.best && a.best < 99 ? a.best : null,
-        },
-        byRace: races,
+        round: Number(r.round), name: r.raceName, country: r.Circuit?.Location?.country || "",
+        countryCode: null, circuit: r.Circuit?.circuitName || "", circuitId: r.Circuit?.circuitId || null,
+        circuitKey: null, location: r.Circuit?.Location?.locality || "", date: r.date ? `${r.date}T${r.time || "13:00:00Z"}` : null,
+        raceDate: r.date ? `${r.date}T${r.time || "13:00:00Z"}` : null, winner: w ? (w.Driver.code || `${w.Driver.familyName}`.slice(0,3).toUpperCase()) : null,
+        winnerName: w ? `${w.Driver.givenName} ${w.Driver.familyName}` : null,
       };
-    })
-    .filter((d) => d.stats.races > 0)
-    .sort((a, b) => b.stats.points - a.stats.points);
+    }).sort((a, b) => a.round - b.round);
+
+    if (year % 10 === 0 || year >= currentSeason - 3) console.log(`  ${y}: ${ds.length} drivers, ${cs.length} teams, ${winRaces.length} races`);
+  }
+
+  // finalize driver/constructor career aggregates
+  const driverList = [...drivers.values()].map((d) => {
+    d.bySeason.sort((a, b) => Number(b.year) - Number(a.year));
+    const wins = d.bySeason.reduce((s, x) => s + x.wins, 0);
+    const poles = d.bySeason.reduce((s, x) => s + x.poles, 0);
+    const points = Math.round(d.bySeason.reduce((s, x) => s + x.points, 0) * 10) / 10;
+    const championships = d.bySeason.filter((x) => x.position === 1).length;
+    const bestPos = Math.min(...d.bySeason.map((x) => x.position).filter((p) => p != null)) || null;
+    const latest = d.bySeason[0];
+    return {
+      id: d.id, code: d.code, first: d.first, last: d.last, name: d.name, nationality: d.nationality,
+      country: d.country, flag: d.flag, headshot: d.headshot, latestTeam: latest.team, latestTeamColour: latest.teamColour,
+      career: { seasons: d.bySeason.length, wins, poles, points, championships, bestPos, firstYear: Number(d.bySeason[d.bySeason.length - 1].year), lastYear: Number(latest.year) },
+      bySeason: d.bySeason,
+    };
+  }).sort((a, b) => b.career.championships - a.career.championships || b.career.wins - a.career.wins);
+
+  const constructorList = [...constructors.values()].map((c) => {
+    c.bySeason.sort((a, b) => Number(b.year) - Number(a.year));
+    const wins = c.bySeason.reduce((s, x) => s + x.wins, 0);
+    const points = Math.round(c.bySeason.reduce((s, x) => s + x.points, 0) * 10) / 10;
+    const championships = c.bySeason.filter((x) => x.position === 1).length;
+    const bestPos = Math.min(...c.bySeason.map((x) => x.position).filter((p) => p != null)) || null;
+    const latest = c.bySeason[0];
+    return {
+      id: c.id, name: c.name, colour: c.colour, nationality: c.nationality, country: c.country, flag: c.flag,
+      career: { seasons: c.bySeason.length, wins, points, championships, bestPos, lastYear: Number(latest.year), bestStrength: Math.max(...c.bySeason.map((x) => x.strength)) },
+      bySeason: c.bySeason,
+    };
+  }).sort((a, b) => b.career.championships - a.career.championships || b.career.wins - a.career.wins);
+
+  // ---- OpenF1 / MultiViewer: headshots + current-season maps -----------------
+  console.log("  fetching current-era headshots + track maps (OpenF1/MultiViewer)…");
+  const tracks = {};
+  const headshotByName = new Map();
+  try {
+    // headshots: scan one race's drivers per recent year
+    for (const yr of [2023, 2024, 2025, currentSeason]) {
+      const races = await get(`${OF1}/sessions?year=${yr}&session_name=Race`);
+      const sk = Array.isArray(races) && races.length ? races[Math.floor(races.length / 2)].session_key : null;
+      if (!sk) continue;
+      const dr = await get(`${OF1}/drivers?session_key=${sk}`);
+      for (const d of dr || []) if (d.headshot_url) headshotByName.set(`${d.first_name} ${d.last_name}`.toLowerCase(), { headshot: d.headshot_url, colour: d.team_colour ? `#${d.team_colour}` : null });
+    }
+    // current-season calendar enrich (circuitKey + maps + countryCode)
+    const meetings = await get(`${OF1}/meetings?year=${currentSeason}`);
+    const ofRaces = await get(`${OF1}/sessions?year=${currentSeason}&session_name=Race`);
+    const raceByMeeting = new Map();
+    for (const s of ofRaces || []) raceByMeeting.set(s.meeting_key, s);
+    const circuitKeys = new Set();
+    const ordered = (meetings || []).filter((m) => !/testing/i.test(m.meeting_name)).sort((a, b) => new Date(a.date_start) - new Date(b.date_start));
+    const ofCal = [];
+    let round = 0;
+    for (const m of ordered) {
+      round++;
+      circuitKeys.add(m.circuit_key);
+      const race = raceByMeeting.get(m.meeting_key);
+      let winner = null, winnerName = null;
+      if (race && new Date(race.date_end || race.date_start).getTime() < Date.now()) {
+        const res = await get(`${OF1}/session_result?session_key=${race.session_key}`);
+        const w = (res || []).find((r) => r.position === 1);
+        if (w) { const dd = (await get(`${OF1}/drivers?session_key=${race.session_key}&driver_number=${w.driver_number}`))?.[0]; winner = dd?.name_acronym || `#${w.driver_number}`; winnerName = dd?.full_name || null; }
+      }
+      ofCal.push({ round, name: m.meeting_name, country: m.country_name, countryCode: m.country_code, circuit: m.circuit_short_name, circuitId: null, circuitKey: m.circuit_key, location: m.location, date: m.date_start, raceDate: race?.date_start || m.date_start, winner, winnerName, image: m.circuit_image || null });
+      // circuit meta
+      tracks[m.circuit_key] = tracks[m.circuit_key] || { key: m.circuit_key, name: m.circuit_short_name, country: m.country_name, countryCode: m.country_code, location: m.location, image: m.circuit_image || null, rotation: 0, x: [], y: [], corners: [] };
+    }
+    if (ofCal.length) calendars[String(currentSeason)] = ofCal;
+    // track maps
+    for (const ck of circuitKeys) {
+      let map = null;
+      for (const yr of [currentSeason, 2025, 2024]) { const data = await get(`${MV}/circuits/${ck}/${yr}`, { retries: 2 }); if (data && Array.isArray(data.x) && data.x.length > 10) { map = data; break; } }
+      if (map) {
+        const step = Math.max(1, Math.floor(map.x.length / 180));
+        const x = [], yy = [];
+        for (let i = 0; i < map.x.length; i += step) { x.push(map.x[i]); yy.push(map.y[i]); }
+        tracks[ck] = { ...tracks[ck], name: map.circuitName || tracks[ck].name, rotation: map.rotation || 0, x, y: yy, corners: (map.corners || []).map((c) => ({ n: c.number, x: c.trackPosition?.x, y: c.trackPosition?.y })) };
+      }
+    }
+  } catch (e) { console.warn("  OpenF1 enrich partial:", e.message); }
+
+  // attach headshots to drivers by name
+  for (const d of driverList) {
+    const h = headshotByName.get(d.name.toLowerCase());
+    if (h) { d.headshot = h.headshot; if (h.colour) d.latestTeamColour = h.colour; }
+  }
+  console.log(`  headshots matched: ${driverList.filter((d) => d.headshot).length}`);
 
   const out = {
-    currentSeason: year,
-    seasons: years.slice().reverse(),
-    generatedAt: new Date().toISOString(),
-    lastRace: (() => {
-      const cal = calendars[year] || [];
-      const done = cal.filter((r) => r.winner);
-      const l = done[done.length - 1];
-      return l ? { name: l.name, date: l.raceDate } : null;
-    })(),
-    drivers,
-    standings,
-    calendars,
-    tracks,
+    currentSeason, seasons: years, generatedAt: new Date().toISOString(),
+    lastRace: (() => { const c = calendars[String(currentSeason)] || []; const done = c.filter((r) => r.winner); const l = done[done.length - 1]; return l ? { name: l.name, date: l.raceDate } : null; })(),
+    drivers: driverList, constructors: constructorList, standings, calendars, tracks,
   };
 
   const file = join(OUT_DIR, "f1.json");
   writeFileSync(file, JSON.stringify(out));
-  console.log(`\nWrote ${drivers.length} drivers, ${Object.keys(tracks).length} tracks, ${years.length} seasons → ${file}`);
-  console.log(`Size: ${(JSON.stringify(out).length / 1024).toFixed(0)} KB · OpenF1/MV calls: ${calls}`);
+  console.log(`\nWrote ${driverList.length} drivers, ${constructorList.length} constructors, ${years.length} seasons, ${Object.keys(tracks).length} tracks`);
+  console.log(`Size: ${(JSON.stringify(out).length / 1024).toFixed(0)} KB · calls: ${calls}`);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

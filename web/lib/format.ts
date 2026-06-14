@@ -25,14 +25,14 @@ export function flagEmoji(iso?: string | null): string {
   return String.fromCodePoint(A + (cc.charCodeAt(0) - 65), A + (cc.charCodeAt(1) - 65));
 }
 
-export function fmtDate(s?: string): string {
+export function fmtDate(s?: string | null): string {
   if (!s) return "";
   const d = new Date(s);
   if (Number.isNaN(d.getTime())) return s;
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
-export function fmtDateLong(s?: string): string {
+export function fmtDateLong(s?: string | null): string {
   if (!s) return "";
   const d = new Date(s);
   if (Number.isNaN(d.getTime())) return s;
@@ -44,7 +44,7 @@ export function fmtDateLong(s?: string): string {
   });
 }
 
-export function isPast(s?: string): boolean {
+export function isPast(s?: string | null): boolean {
   if (!s) return false;
   const d = new Date(s);
   return !Number.isNaN(d.getTime()) && d.getTime() < Date.now();

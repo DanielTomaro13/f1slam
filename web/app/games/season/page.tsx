@@ -17,12 +17,12 @@ export default function Page() {
       slug="season"
       emoji="🏆"
       title="Season Simulator"
-      intro="Spin for your two drivers, your engineering team and your title sponsor, then develop the car and simulate a full Formula 1 season against the grid. It's a gamble — the spins decide what you've got to work with. Can you take the title anyway?"
+      intro="Spin for your two drivers, your car and your title sponsor — across the whole of F1 history — then develop the car and simulate a full season against a cross-era grid. The spins decide what you've got. Can you take the title anyway?"
       howTo={[
-        "Spin for your first driver — the wheel deals you five from the real grid, and you pick one (no take-backs). Spin again for your second.",
-        "Spin for an engineering team — each gives a different base car (some fast, some reliable, some a gamble).",
+        "Spin for your first driver — the wheel deals you five drivers from across F1 history, each rated on how they actually performed that very season (2024 Norris hits different to 2009 Norris). Pick one, then spin for your second.",
+        "Spin for a car — three real constructor seasons (a dominant year is a rocket, an off year is a dog). The car's strength sets your base.",
         "Spin for a title sponsor — the bigger the backer, the bigger your development budget.",
-        "Spend that budget improving the car across chassis, power unit, aero and reliability — pace wins races, but unreliable cars don't finish.",
+        "Spend the budget improving the car across chassis, power unit, aero and reliability — pace wins races, but unreliable cars don't finish.",
         "Simulate the season. Win the title to be crowned champions — a perfect, win-every-race season is the ultimate Slam.",
       ]}
     >

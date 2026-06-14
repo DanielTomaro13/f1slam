@@ -18,7 +18,7 @@ export default function DriversPage() {
       <header>
         <h1 style={{ fontSize: "2rem", fontWeight: 900, margin: 0, textTransform: "uppercase" }}>Drivers</h1>
         <p style={{ color: "var(--muted)", margin: "6px 0 0" }}>
-          Career stats across every season OpenF1 covers ({data.drivers.length} drivers). Search, sort and dive in.
+          Full career stats for all {data.drivers.length} Formula 1 drivers since 1950. Search, sort by era and dive in.
         </p>
       </header>
       <DriversBrowser drivers={data.drivers} />

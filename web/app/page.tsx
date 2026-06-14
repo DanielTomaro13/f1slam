@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { pageMeta } from "@/lib/seo";
 import { serverF1 } from "@/lib/serverdata";
-import { driverTable, calendar } from "@/lib/f1";
+import { driverStandings, calendar, driverHref } from "@/lib/f1";
 import { flagEmoji, fmtDate, isPast } from "@/lib/format";
 import { GAMES } from "@/lib/gamelist";
 import HomeLeaderboard from "@/components/HomeLeaderboard";
@@ -20,7 +20,7 @@ export const metadata: Metadata = pageMeta({
 
 export default function Home() {
   const data = serverF1();
-  const table = driverTable(data).slice(0, 5);
+  const table = driverStandings(data).slice(0, 5);
   const cal = calendar(data);
   const next = cal.find((r) => !isPast(r.raceDate));
   const recent = [...cal].filter((r) => r.winner).slice(-3).reverse();
@@ -71,12 +71,12 @@ export default function Home() {
             </thead>
             <tbody>
               {table.map((e) => (
-                <tr key={e.number}>
+                <tr key={e.driverId}>
                   <td style={{ fontFamily: "var(--font-mono)" }}>{e.position}</td>
                   <td style={{ fontWeight: 700 }}>
-                    {e.driver ? `${flagEmoji(e.driver.country)} ${e.driver.firstName} ${e.driver.lastName}` : `#${e.number}`}
+                    <Link href={driverHref(e.driverId)}><span style={{ color: e.teamColour }}>▍</span> {e.flag} {e.name}</Link>
                   </td>
-                  <td style={{ color: "var(--muted)" }}>{e.driver?.team ?? "—"}</td>
+                  <td style={{ color: "var(--muted)" }}>{e.team}</td>
                   <td style={{ fontFamily: "var(--font-cond)", color: "var(--gold)" }}>{e.points}</td>
                 </tr>
               ))}

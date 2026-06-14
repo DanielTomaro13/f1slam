@@ -4,7 +4,7 @@ import { loadGamesData, type GameDriver } from "@/lib/games-data";
 import { loadF1, type Round, type Track } from "@/lib/f1";
 import { recordScore } from "@/lib/progress";
 import {
-  driverRating, carPerf, simulateRace, mulberry32, POINTS, type Entry, type CarBuild,
+  careerRating, carPerf, simulateRace, mulberry32, type Entry, type CarBuild,
 } from "@/lib/sim";
 import ScoreSubmit from "@/components/games/ScoreSubmit";
 import Confetti from "@/components/Confetti";
@@ -52,15 +52,14 @@ function rollEvent(rng: () => number, money: number): GEvent | null {
 function buildField(pool: GameDriver[], picked: GameDriver[], player: Entry[]): Entry[] {
   const used = new Set(picked.map((d) => d.id));
   const ai = pool.filter((d) => !used.has(d.id)).slice(0, 18);
-  const maxPpr = Math.max(...ai.map((d) => d.points / Math.max(1, d.races)), 1);
   return [
     ...player,
     ...ai.map((d, i) => {
-      const ppr = d.points / Math.max(1, d.races);
+      const r = careerRating(d);
       return {
         id: d.id, name: d.name, code: d.code, team: d.team, colour: d.teamColour,
-        driver: driverRating(d), car: Math.round(Math.min(97, 66 + (ppr / maxPpr) * 30 + (i % 3) - 1)),
-        reliability: 0.86 + (ppr / maxPpr) * 0.1, isPlayer: false, flag: d.flag, headshot: d.headshot,
+        driver: r, car: Math.round(Math.min(97, 62 + (r - 60) * 0.7 + (i % 3) - 1)),
+        reliability: 0.86 + Math.min(0.1, d.championships * 0.02), isPlayer: false, flag: d.flag, headshot: d.headshot,
       } as Entry;
     }),
   ];
@@ -80,7 +79,7 @@ export default function CareerMode() {
 
   const [round, setRound] = useState(0);
   const [entries, setEntries] = useState<Entry[]>([]);
-  const [tally, setTally] = useState<Record<number, number>>({});
+  const [tally, setTally] = useState<Record<string, number>>({});
   const [event, setEvent] = useState<GEvent | null>(null);
   const [eventMsg, setEventMsg] = useState<string>("");
   const [lastResultMsg, setLastResultMsg] = useState<string>("");
@@ -88,7 +87,7 @@ export default function CareerMode() {
   const rngRef = useRef<() => number>(mulberry32(1));
 
   useEffect(() => {
-    loadGamesData().then((d) => setPool(d.drivers));
+    loadGamesData().then((d) => setPool(d.players));
     loadF1().then((f) => { setRounds((f.calendars[String(f.currentSeason)] || []).slice(0, ROUNDS)); setTracks(f.tracks); });
   }, []);
 
@@ -106,12 +105,12 @@ export default function CareerMode() {
   }
 
   function start() {
-    rngRef.current = mulberry32(Math.floor((picked[0].id + picked[1].id + Date.now()) % 2147483647) >>> 0);
+    rngRef.current = mulberry32((Date.now() + picked[0].wins * 131 + picked[1].championships * 17) >>> 0);
     const car = playerCar();
     const rel = 0.80 + (build.reliability / 100) * 0.18;
     const player: Entry[] = picked.map((d) => ({
       id: d.id, name: d.name, code: d.code, team: teamName, colour: "#ff5436",
-      driver: driverRating(d), car, reliability: rel, isPlayer: true, flag: d.flag, headshot: d.headshot,
+      driver: careerRating(d), car, reliability: rel, isPlayer: true, flag: d.flag, headshot: d.headshot,
     }));
     setEntries(buildField(pool, picked, player));
     setTally({});
@@ -254,7 +253,7 @@ export default function CareerMode() {
                 <img src={d.headshot || ""} alt="" width={34} height={34} loading="lazy" style={{ borderRadius: 8, background: "var(--panel-2)", objectFit: "cover" }} />
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontWeight: 700, fontSize: ".8rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{d.flag} {d.name}</div>
-                  <div style={{ color: "var(--muted)", fontSize: ".7rem" }}>OVR {driverRating(d)}</div>
+                  <div style={{ color: "var(--muted)", fontSize: ".7rem" }}>OVR {careerRating(d)}</div>
                 </div>
               </button>
             );

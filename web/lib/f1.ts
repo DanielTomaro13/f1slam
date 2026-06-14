@@ -1,89 +1,99 @@
 /**
  * F1 dataset types + loaders.
  *
- * The static site reads one multi-season snapshot (public/data/f1.json) built by
- * the OpenF1 pipeline. `serverF1()` (lib/serverdata) reads it at build time;
- * `loadF1()` fetches it in the browser for client components / games.
+ * Full-history snapshot (public/data/f1.json) built from Jolpica/Ergast (1950→)
+ * plus OpenF1/MultiViewer current-era track maps & headshots. `serverF1()`
+ * (lib/serverdata) reads it at build time; `loadF1()` fetches it client-side.
  */
 
-export interface DriverStats {
-  races: number;
-  wins: number;
-  podiums: number;
-  poles: number;
+export interface DriverSeason {
+  year: string;
+  team: string;
+  teamColour: string;
   points: number;
-  dnf: number;
-  bestFinish: number | null;
+  wins: number;
+  poles: number;
+  position: number;
+  rating: number; // 0..100 strength that season (used by the games)
 }
 
-export interface RaceResult {
-  season: number;
-  round: number | null;
-  race: string | null;
-  country: string | null;
-  countryCode: string | null;
-  circuitKey: number | null;
-  date: string | null;
-  position: number | null;
+export interface DriverCareer {
+  seasons: number;
+  wins: number;
+  poles: number;
   points: number;
-  dnf: boolean;
+  championships: number;
+  bestPos: number;
+  firstYear: number;
+  lastYear: number;
 }
 
 export interface Driver {
-  number: number;
+  id: string;            // ergast driverId, e.g. "max_verstappen"
   code: string;
-  firstName: string;
-  lastName: string;
-  fullName: string;
-  team: string;
-  teamColour: string;
-  country: string | null;
+  first: string;
+  last: string;
+  name: string;
+  nationality: string;
+  country: string | null; // ISO-3
+  flag: string;
   headshot: string | null;
-  stats: DriverStats;
-  byRace: RaceResult[];
+  latestTeam: string;
+  latestTeamColour: string;
+  career: DriverCareer;
+  bySeason: DriverSeason[]; // newest first
 }
 
-export interface DriverStanding { number: number; points: number; position: number }
-export interface ConstructorStanding { team: string; points: number; position: number }
-export interface SeasonStandings { drivers: DriverStanding[]; constructors: ConstructorStanding[] }
+export interface ConstructorSeason { year: string; points: number; wins: number; position: number; strength: number }
+export interface Constructor {
+  id: string;
+  name: string;
+  colour: string;
+  nationality: string;
+  country: string | null;
+  flag: string;
+  career: { seasons: number; wins: number; points: number; championships: number; bestPos: number; lastYear: number; bestStrength: number };
+  bySeason: ConstructorSeason[];
+}
+
+export interface DriverStandingRow {
+  driverId: string; code: string; name: string; flag: string;
+  team: string; teamColour: string; points: number; wins: number; position: number;
+}
+export interface ConstructorStandingRow {
+  id: string; name: string; colour: string; points: number; wins: number; position: number; strength: number;
+}
+export interface SeasonStandings { drivers: DriverStandingRow[]; constructors: ConstructorStandingRow[] }
 
 export interface Round {
   round: number;
-  meetingKey: number;
   name: string;
-  official: string;
   country: string;
-  countryCode: string;
+  countryCode: string | null;
   circuit: string;
-  circuitKey: number;
+  circuitId: string | null;
+  circuitKey: number | null;
   location: string;
-  image: string | null;
-  date: string;
-  raceDate: string;
-  sessionKey: number | null;
-  winner: string | null;
+  date: string | null;
+  raceDate: string | null;
+  winner: string | null;      // 3-letter code
+  winnerName: string | null;
+  image?: string | null;
 }
 
 export interface Corner { n: number; x: number; y: number }
 export interface Track {
-  key: number;
-  name: string;
-  country: string;
-  countryCode: string;
-  location: string;
-  image: string | null;
-  rotation: number;
-  x: number[];
-  y: number[];
-  corners: Corner[];
+  key: number; name: string; country: string; countryCode: string | null; location: string;
+  image: string | null; rotation: number; x: number[]; y: number[]; corners: Corner[];
 }
 
 export interface F1Data {
   currentSeason: number;
-  seasons: number[];
+  seasons: number[];           // newest first
   generatedAt: string;
   lastRace: { name: string; date: string } | null;
   drivers: Driver[];
+  constructors: Constructor[];
   standings: Record<string, SeasonStandings>;
   calendars: Record<string, Round[]>;
   tracks: Record<string, Track>;
@@ -93,34 +103,30 @@ const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
 let _client: Promise<F1Data> | null = null;
 export function loadF1(): Promise<F1Data> {
-  if (!_client) {
-    _client = fetch(`${BASE}/data/f1.json`, { cache: "force-cache" }).then(
-      (r) => r.json() as Promise<F1Data>
-    );
-  }
+  // Revalidate against the server (cheap 304s) so the weekly data refresh is
+  // picked up — force-cache would pin returning visitors to a stale snapshot.
+  if (!_client) _client = fetch(`${BASE}/data/f1.json`, { cache: "no-cache" }).then((r) => r.json() as Promise<F1Data>);
   return _client;
 }
 
-/** Championship table for a season, joined to driver identities (in order). */
-export function driverTable(data: F1Data, season: number | string = data.currentSeason) {
-  const byNum = new Map(data.drivers.map((d) => [d.number, d]));
-  const s = data.standings[String(season)];
-  if (!s) return [];
-  return s.drivers.map((row) => ({ ...row, driver: byNum.get(row.number) || null }));
-}
+export const driverHref = (idOrDriver: string | { id: string }) =>
+  `/drivers/${typeof idOrDriver === "string" ? idOrDriver : idOrDriver.id}`;
 
-export function constructorTable(data: F1Data, season: number | string = data.currentSeason) {
+export function driverById(data: F1Data, id: string): Driver | undefined {
+  return data.drivers.find((d) => d.id === id);
+}
+export function constructorById(data: F1Data, id: string): Constructor | undefined {
+  return data.constructors.find((c) => c.id === id);
+}
+export function driverStandings(data: F1Data, season: number | string = data.currentSeason): DriverStandingRow[] {
+  return data.standings[String(season)]?.drivers ?? [];
+}
+export function constructorStandings(data: F1Data, season: number | string = data.currentSeason): ConstructorStandingRow[] {
   return data.standings[String(season)]?.constructors ?? [];
 }
-
 export function calendar(data: F1Data, season: number | string = data.currentSeason): Round[] {
   return data.calendars[String(season)] ?? [];
 }
-
-export function teamColour(data: F1Data, team: string): string {
-  return data.drivers.find((d) => d.team === team)?.teamColour || "#7a7a7a";
-}
-
 export function trackByKey(data: F1Data, key: number | null | undefined): Track | null {
   if (key == null) return null;
   return data.tracks[String(key)] ?? null;

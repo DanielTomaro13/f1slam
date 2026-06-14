@@ -21,11 +21,11 @@ export default function PitStop() {
   const [newBest, setNewBest] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { loadGamesData().then((d) => setPool(d.drivers)); }, []);
+  useEffect(() => { loadGamesData().then((d) => setPool(d.players)); }, []);
 
   // surname + full-name lookup → driver id
   const lookup = useMemo(() => {
-    const m = new Map<string, number>();
+    const m = new Map<string, string>();
     for (const d of pool) {
       m.set(norm(d.name), d.id);
       m.set(norm(d.name.split(" ").slice(-1)[0]), d.id);

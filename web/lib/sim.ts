@@ -11,7 +11,7 @@ export const POINTS = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
 export const FASTEST_LAP_BONUS = 1;
 
 export interface Entry {
-  id: number;
+  id: string;
   name: string;
   code: string;
   team: string;
@@ -31,21 +31,16 @@ export interface CarBuild {
   reliability: number;
 }
 
-/** Driver skill 0..100 from real career stats (win/podium/pole rate + volume). */
-export function driverRating(d: GameDriver): number {
-  const races = Math.max(1, d.races);
-  const winRate = d.wins / races;
-  const podRate = d.podiums / races;
-  const poleRate = d.poles / races;
-  const ppr = d.points / races; // points per race
+/** Driver skill 0..100 from full-career totals (used by Career mode). */
+export function careerRating(d: GameDriver): number {
   const raw =
-    62 +
-    winRate * 60 +
-    podRate * 22 +
-    poleRate * 18 +
-    Math.min(12, ppr * 0.7) +
-    Math.min(6, races / 30); // experience
-  return Math.round(Math.min(99, Math.max(52, raw)));
+    58 +
+    d.championships * 4 +
+    Math.min(22, d.wins * 0.45) +
+    Math.min(8, d.poles * 0.2) +
+    Math.min(8, d.points / 600) +
+    Math.min(4, d.seasons / 4);
+  return Math.round(Math.min(99, Math.max(54, raw)));
 }
 
 export function carPerf(b: CarBuild): number {
@@ -69,14 +64,14 @@ function noise(rng: () => number, spread: number): number {
 
 export interface RaceResult {
   order: Entry[];               // finishing order (DNFs at the back)
-  dnf: Set<number>;             // entry ids that retired
-  fastestLap: number | null;    // entry id
-  points: Map<number, number>;  // entry id -> points scored
+  dnf: Set<string>;             // entry ids that retired
+  fastestLap: string | null;    // entry id
+  points: Map<string, number>;  // entry id -> points scored
 }
 
 /** Simulate a single race. `chaos` 0..1 raises variance (street circuits, weather). */
 export function simulateRace(entries: Entry[], rng: () => number, chaos = 0.35): RaceResult {
-  const dnf = new Set<number>();
+  const dnf = new Set<string>();
   const scored: { e: Entry; pace: number }[] = [];
   for (const e of entries) {
     // base pace: driver + car, with race-day variance
@@ -95,7 +90,7 @@ export function simulateRace(entries: Entry[], rng: () => number, chaos = 0.35):
   scored.sort((a, b) => b.pace - a.pace);
   const order = [...scored.map((s) => s.e), ...entries.filter((e) => dnf.has(e.id))];
 
-  const points = new Map<number, number>();
+  const points = new Map<string, number>();
   scored.forEach((s, i) => { if (i < POINTS.length) points.set(s.e.id, POINTS[i]); });
   // fastest lap: usually a front-runner, weighted by pace
   const flPool = scored.slice(0, 6);
@@ -110,7 +105,7 @@ export interface SeasonStanding { entry: Entry; points: number; wins: number; po
 /** Run a full season over `rounds` races. Returns final driver + team tables. */
 export function simulateSeason(entries: Entry[], rounds: number, seed: number, chaosByRound?: number[]) {
   const rng = mulberry32(seed);
-  const tally = new Map<number, SeasonStanding>();
+  const tally = new Map<string, SeasonStanding>();
   for (const e of entries) tally.set(e.id, { entry: e, points: 0, wins: 0, podiums: 0 });
   const raceLog: RaceResult[] = [];
 

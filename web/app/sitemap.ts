@@ -2,7 +2,6 @@ import type { MetadataRoute } from "next";
 import { SITE } from "@/lib/seo";
 import { GAMES } from "@/lib/gamelist";
 import { serverF1 } from "@/lib/serverdata";
-import { slugify } from "@/lib/format";
 
 export const dynamic = "force-static";
 
@@ -37,7 +36,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
   const data = serverF1();
   const driverPaths = data.drivers.map((d) => ({
-    url: `${SITE.url}/drivers/${d.number}/${slugify(`${d.firstName} ${d.lastName}`)}`,
+    url: `${SITE.url}/drivers/${d.id}`,
     lastModified: now,
     changeFrequency: "weekly" as const,
     priority: 0.5,

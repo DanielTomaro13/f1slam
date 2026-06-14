@@ -8,7 +8,7 @@ const GAME = "higher-or-lower";
 
 const METRICS: { key: keyof GameDriver; label: string }[] = [
   { key: "wins", label: "career wins" },
-  { key: "podiums", label: "podiums" },
+  { key: "championships", label: "world titles" },
   { key: "poles", label: "pole positions" },
   { key: "points", label: "career points" },
 ];
@@ -26,7 +26,7 @@ export default function HigherOrLower() {
 
   const randMetric = () => METRICS[Math.floor(Math.random() * METRICS.length)];
   const pick = useCallback(
-    (exclude: number[], p: GameDriver[]) => {
+    (exclude: string[], p: GameDriver[]) => {
       const cand = p.filter((x) => !exclude.includes(x.id));
       return cand[Math.floor(Math.random() * cand.length)];
     },
@@ -45,8 +45,8 @@ export default function HigherOrLower() {
 
   useEffect(() => {
     loadGamesData().then((d) => {
-      const notable = d.drivers.filter((x) => x.races >= 3).slice(0, 60);
-      const usable = notable.length >= 6 ? notable : d.drivers;
+      const notable = d.players.filter((x) => x.wins >= 1 || x.points >= 100).slice(0, 80);
+      const usable = notable.length >= 6 ? notable : d.players.slice(0, 80);
       setPool(usable);
       newRound(usable);
     });

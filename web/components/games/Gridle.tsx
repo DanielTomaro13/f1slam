@@ -16,19 +16,19 @@ function cmpNum(a: number, b: number, near: number): { state: State; arrow?: "â–
 }
 
 function compare(g: GameDriver, t: GameDriver): Cell[] {
-  const num = cmpNum(g.id, t.id, 4);
-  const wins = cmpNum(g.wins, t.wins, 5);
-  const pts = cmpNum(g.points, t.points, 120);
+  const titles = cmpNum(g.championships, t.championships, 1);
+  const wins = cmpNum(g.wins, t.wins, 8);
+  const era = cmpNum(g.lastYear, t.lastYear, 6);
   return [
     { text: g.team, state: g.team === t.team ? "hit" : "miss" },
     { text: `${g.flag}`, state: g.country === t.country ? "hit" : "miss" },
-    { text: `#${g.id}`, state: num.state, arrow: num.arrow },
+    { text: String(g.championships), state: titles.state, arrow: titles.arrow },
     { text: String(g.wins), state: wins.state, arrow: wins.arrow },
-    { text: String(g.points), state: pts.state, arrow: pts.arrow },
+    { text: String(g.lastYear), state: era.state, arrow: era.arrow },
   ];
 }
 
-const HEADERS = ["Team", "Nat", "No.", "Wins", "Points"];
+const HEADERS = ["Team", "Nat", "Titles", "Wins", "Last yr"];
 const COLOR: Record<State, string> = { hit: "#2e7d4f", near: "#9a7d1f", miss: "#2a1410" };
 
 export default function Gridle() {
@@ -42,8 +42,8 @@ export default function Gridle() {
 
   useEffect(() => {
     loadGamesData().then((d) => {
-      const eligible = d.drivers.filter((x) => x.races >= 2);
-      const usable = eligible.length >= 8 ? eligible : d.drivers;
+      const eligible = d.players.filter((x) => x.wins >= 3 || x.championships >= 1);
+      const usable = eligible.length >= 8 ? eligible : d.players.slice(0, 120);
       const r = rng(dailySeed() * 0x85ebca6b);
       setPool(usable);
       setTarget(usable[Math.floor(r() * usable.length)]);
