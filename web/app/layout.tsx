@@ -82,6 +82,14 @@ const appLd = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en-GB">
+      <head>
+        {/* Google AdSense — literal loader in <head> for site verification + Auto Ads */}
+        <script
+          async
+          src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${AD_CLIENT}`}
+          crossOrigin="anonymous"
+        />
+      </head>
       <body>
         <SisterSites active="f1" />
         <SiteHeader />
@@ -94,14 +102,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <SiteFooter />
         <JsonLd data={orgLd} />
         <JsonLd data={appLd} />
-        {/* Google AdSense loader — enables Auto Ads + the manual units above */}
-        <Script
-          id="adsbygoogle-init"
-          async
-          src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${AD_CLIENT}`}
-          crossOrigin="anonymous"
-          strategy="afterInteractive"
-        />
         {/* Cloudflare Web Analytics — privacy-friendly, no cookies */}
         <Script
           defer
