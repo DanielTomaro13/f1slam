@@ -40,7 +40,8 @@ export default function SiteFooter() {
           <nav style={{ display: "grid", gap: 6, fontSize: ".85rem" }}>
             <strong style={{ color: "var(--text)" }}>About</strong>
             <Link href="/grand-slams">What is a Grand Slam?</Link>
-            <Link href="/about">How it works</Link>
+            <Link href="/about">About</Link>
+            <Link href="/contact">Contact</Link>
             <Link href="/privacy">Privacy</Link>
           </nav>
         </div>

@@ -102,13 +102,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           crossOrigin="anonymous"
           strategy="afterInteractive"
         />
-        {/* Cloudflare Web Analytics — privacy-friendly, no cookies. Replace the
-            token with this site's own beacon once the zone is created. */}
+        {/* Cloudflare Web Analytics — privacy-friendly, no cookies */}
         <Script
           defer
           src="https://static.cloudflareinsights.com/beacon.min.js"
           strategy="afterInteractive"
-          data-cf-beacon='{"token": "REPLACE_WITH_F1SLAM_BEACON_TOKEN"}'
+          data-cf-beacon='{"token": "2d8e27c812394086b306714df76dd80c"}'
         />
       </body>
     </html>

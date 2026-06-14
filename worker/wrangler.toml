@@ -2,17 +2,20 @@ name = "f1slam-leaderboard"
 main = "src/index.ts"
 compatibility_date = "2025-01-01"
 
-# Branded endpoint on the project's own domain (avoids the account-wide
-# *.workers.dev subdomain). Cloudflare provisions the DNS record + TLS cert.
+# Keep the account-wide *.workers.dev URL live as a reliable fallback endpoint.
+workers_dev = true
+
+# Branded endpoint on the project's own domain. Cloudflare provisions the DNS
+# record + TLS cert automatically once f1slam.com is an active zone on this
+# account. If the zone isn't ready, comment this block out and deploy; add it
+# back (or bind the route in the dashboard) once DNS is live.
 [[routes]]
 pattern = "api.f1slam.com"
 custom_domain = true
 
-# Created with: wrangler kv namespace create LEADERBOARD
-# then paste the returned id below.
 [[kv_namespaces]]
 binding = "LEADERBOARD"
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
+id = "56ba2b1321b6485cb0f2fc8d91110f28"
 
 [vars]
 ALLOWED_ORIGIN = "https://f1slam.com"
