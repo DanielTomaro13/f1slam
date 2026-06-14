@@ -23,7 +23,8 @@ export default function Page() {
         "Spin for a car — three real constructor seasons (a dominant year is a rocket, an off year is a dog). The car's strength sets your base.",
         "Spin for a title sponsor — the bigger the backer, the bigger your development budget.",
         "Spend the budget improving the car across chassis, power unit, aero and reliability — pace wins races, but unreliable cars don't finish.",
-        "Simulate the season. Win the title to be crowned champions — a perfect, win-every-race season is the ultimate Slam.",
+        "Simulate the season and watch it unfold race by race. The real goal isn't just the title — it's to WIN EVERY RACE for a perfect season, the ultimate Slam.",
+        "Share your result to Instagram, X or Facebook and challenge a mate to go perfect.",
       ]}
     >
       <SeasonSimulator />

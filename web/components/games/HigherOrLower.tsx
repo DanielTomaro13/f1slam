@@ -9,6 +9,7 @@ const GAME = "higher-or-lower";
 const METRICS: { key: keyof GameDriver; label: string }[] = [
   { key: "wins", label: "career wins" },
   { key: "championships", label: "world titles" },
+  { key: "podiums", label: "podiums" },
   { key: "poles", label: "pole positions" },
   { key: "points", label: "career points" },
 ];

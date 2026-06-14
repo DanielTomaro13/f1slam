@@ -7,6 +7,7 @@ import {
   careerRating, carPerf, simulateRace, mulberry32, type Entry, type CarBuild,
 } from "@/lib/sim";
 import ScoreSubmit from "@/components/games/ScoreSubmit";
+import ShareButtons from "@/components/ShareButtons";
 import Confetti from "@/components/Confetti";
 import TrackMap from "@/components/TrackMap";
 
@@ -404,6 +405,10 @@ export default function CareerMode() {
         <p style={{ color: "var(--muted)", margin: 0 }}>
           You finished P{myPos} with {myScore} points and ${money}m in the bank. Champion: {champ?.e.flag} {champ?.e.name}.
         </p>
+        <ShareButtons
+          card={{ eyebrow: "Career Mode", big: `P${myPos}`, headline: won ? "CHAMPIONS" : "SEASON OVER", lines: [teamName, `${myScore} championship points`, `$${money}m in the bank`], path: "/games/career" }}
+          caption={`I finished P${myPos} (${myScore} pts) running ${teamName} in F1Slam Career Mode 🏎️ Think you can do better?`}
+        />
         <ScoreSubmit game={GAME} score={myScore} unit="pts" />
         <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
           <button className="btn btn-primary" onClick={reset}>New career</button>

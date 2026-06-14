@@ -4,7 +4,9 @@ import { loadGamesData, type SeasonPick, type CarPick } from "@/lib/games-data";
 import { recordScore } from "@/lib/progress";
 import { carPerf, simulateSeason, type Entry, type CarBuild } from "@/lib/sim";
 import ScoreSubmit from "@/components/games/ScoreSubmit";
+import ShareButtons from "@/components/ShareButtons";
 import Confetti from "@/components/Confetti";
+import { tick, settle, tap, fanfare, isMuted, setMuted } from "@/lib/sound";
 
 const GAME = "season-sim";
 const ROUNDS = 24;
@@ -59,16 +61,27 @@ export default function SeasonSimulator() {
   const [build, setBuild] = useState<Record<Cat, number>>({ chassis: 60, engine: 60, aero: 60, reliability: 60 });
   const [teamName, setTeamName] = useState("My Team");
   const [result, setResult] = useState<ReturnType<typeof simulateSeason> | null>(null);
+  const [muted, setMutedState] = useState(false);
 
-  useEffect(() => { loadGamesData().then(setData); }, []);
+  useEffect(() => { loadGamesData().then(setData); setMutedState(isMuted()); }, []);
+
+  // celebratory / closing sound when the season finishes
+  useEffect(() => {
+    if (stage !== "result" || !result) return;
+    const myWin = result.drivers[0]?.entry.isPlayer || result.constructors[0]?.team === teamName;
+    if (myWin) fanfare(); else settle();
+  }, [stage]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function toggleMute() { const m = !muted; setMutedState(m); setMuted(m); if (!m) tap(); }
 
   const base = car ? Math.round(car.strength * 0.6 + 30) : 55; // map strength→base car ~48..89
   function pickDriver(p: SeasonPick) {
+    tap();
     if (stage === "d1") { setD1(p); setStage("d2"); }
     else { setD2(p); setStage("car"); }
   }
-  function pickCar(c: CarPick) { setCar(c); const b = Math.round(c.strength * 0.6 + 30); setBuild({ chassis: b, engine: b, aero: b, reliability: b }); setStage("sponsor"); }
-  function pickSponsor(s: Sponsor) { setSponsor(s); setStage("build"); }
+  function pickCar(c: CarPick) { tap(); setCar(c); const b = Math.round(c.strength * 0.6 + 30); setBuild({ chassis: b, engine: b, aero: b, reliability: b }); setStage("sponsor"); }
+  function pickSponsor(s: Sponsor) { tap(); setSponsor(s); setStage("build"); }
 
   const spent = CATS.reduce((s, c) => s + (build[c.key] - base), 0);
   const remaining = (sponsor?.budget ?? 0) - spent;
@@ -105,30 +118,81 @@ export default function SeasonSimulator() {
   if (!data) return <p style={{ color: "var(--muted)" }}>Loading the history books…</p>;
   const stepNum = STAGES.indexOf(stage) + 1;
 
-  if (stage === "result" && result) {
+  if (stage === "result" && result && d1 && d2 && car) {
     const champ = result.drivers[0];
     const myDrivers = result.drivers.filter((s) => s.entry.isPlayer);
     const myTeamPos = result.constructors.findIndex((t) => t.team === teamName) + 1;
-    const driverTitle = champ.entry.isPlayer;
-    const slam = myDrivers.some((s) => s.wins === ROUNDS);
-    const won = driverTitle || myTeamPos === 1;
-    const score = Math.max(...myDrivers.map((s) => s.points), 0);
+    const myIds = new Set([d1.key, d2.key]);
+
+    // race-by-race from the season log — the goal is to WIN EVERY RACE
+    const rows = result.raceLog.map((res, i) => {
+      const winner = res.order.find((e) => !res.dnf.has(e.id)) || null;
+      const place = (id: string) => {
+        if (res.dnf.has(id)) return "DNF";
+        const idx = res.order.findIndex((e) => e.id === id);
+        return idx >= 0 ? `P${idx + 1}` : "—";
+      };
+      return { round: i + 1, winner, d1: place(d1.key), d2: place(d2.key), mineWon: !!winner && myIds.has(winner.id) };
+    });
+    const myWins = rows.filter((r) => r.mineWon).length;
+    const perfect = myWins === ROUNDS;
+    const champTitle = champ.entry.isPlayer;
+    const won = champTitle || myTeamPos === 1;
+    const points = Math.max(...myDrivers.map((s) => s.points), 0);
+    const headline = perfect ? "Perfect Season!" : champTitle ? "World Champions!" : myTeamPos === 1 ? "Constructors' Champions!" : `P${myTeamPos} Constructors`;
+
     return (
       <div style={{ display: "grid", gap: 16 }}>
-        {(won || slam) && <Confetti />}
-        <div className="card pop" style={{ padding: "1.4rem", textAlign: "center", borderColor: won ? "var(--gold)" : "var(--border)" }}>
-          {slam ? <div style={{ fontFamily: "var(--font-cond)", fontSize: "1.8rem", color: "var(--gold)", textTransform: "uppercase" }}>🏁 The Slam! A perfect season</div>
-            : driverTitle ? <div style={{ fontFamily: "var(--font-cond)", fontSize: "1.8rem", color: "var(--gold)", textTransform: "uppercase" }}>🏆 World Champions!</div>
-            : myTeamPos === 1 ? <div style={{ fontFamily: "var(--font-cond)", fontSize: "1.6rem", color: "var(--gold)", textTransform: "uppercase" }}>🏆 Constructors&apos; Champions!</div>
-            : <div style={{ fontFamily: "var(--font-cond)", fontSize: "1.5rem", textTransform: "uppercase" }}>Season complete — P{myTeamPos} constructors</div>}
-          <p style={{ color: "var(--muted)", margin: "8px 0 0" }}>
-            {d1?.year} {d1?.code} &amp; {d2?.year} {d2?.code} in a {car?.year} {car?.name}. Champion: <strong style={{ color: "var(--text)" }}>{champ.entry.flag} {champ.entry.name}</strong> ({champ.points} pts)
+        {(won || perfect) && <Confetti />}
+
+        {/* clear score block (legible on iOS) */}
+        <div className="card pop" style={{ padding: "1.6rem 1.2rem", textAlign: "center", display: "grid", gap: 6, borderColor: perfect ? "var(--gold)" : won ? "var(--gold)" : "var(--border)" }}>
+          <div style={{ fontFamily: "var(--font-cond)", fontSize: "1.4rem", textTransform: "uppercase", color: won ? "var(--gold)" : "var(--text)" }}>
+            {perfect ? "🏁 The Slam" : "🏁"} {headline}
+          </div>
+          <div style={{ display: "flex", gap: 24, justifyContent: "center", flexWrap: "wrap", marginTop: 4 }}>
+            <div>
+              <div style={{ fontFamily: "var(--font-cond)", fontSize: "3rem", lineHeight: 1, color: perfect ? "var(--gold)" : "var(--accent)" }}>{myWins}<span style={{ fontSize: "1.4rem", color: "var(--muted)" }}>/{ROUNDS}</span></div>
+              <div style={{ color: "var(--muted)", fontSize: ".72rem", textTransform: "uppercase", letterSpacing: ".06em" }}>Races won</div>
+            </div>
+            <div>
+              <div style={{ fontFamily: "var(--font-cond)", fontSize: "3rem", lineHeight: 1, color: "var(--gold)" }}>{points}</div>
+              <div style={{ color: "var(--muted)", fontSize: ".72rem", textTransform: "uppercase", letterSpacing: ".06em" }}>Points</div>
+            </div>
+          </div>
+          <p style={{ color: "var(--muted)", margin: "6px 0 0", fontSize: ".9rem" }}>
+            {d1.year} {d1.code} &amp; {d2.year} {d2.code} in a {car.year} {car.name}.{" "}
+            {perfect ? "Every single race won — the rarest feat in the sim." : `Win all ${ROUNDS} for a perfect season.`}
           </p>
         </div>
+
+        {/* race-by-race */}
+        <div className="card scroll-x">
+          <div style={{ padding: "0.8rem 1rem 0", fontWeight: 800, textTransform: "uppercase", fontFamily: "var(--font-cond)" }}>Race by race</div>
+          <table className="stat">
+            <thead><tr><th>Rnd</th><th>Winner</th><th>{d1.code}</th><th>{d2.code}</th></tr></thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.round} style={{ background: r.mineWon ? "rgba(232,196,105,0.12)" : undefined }}>
+                  <td style={{ fontFamily: "var(--font-mono)" }}>R{r.round}</td>
+                  <td style={{ fontWeight: 700, color: r.mineWon ? "var(--gold)" : "var(--text)" }}>{r.mineWon ? "🏆 " : ""}{r.winner?.flag} {r.winner?.code ?? "—"}</td>
+                  <td style={{ fontFamily: "var(--font-mono)", color: r.d1 === "P1" ? "var(--gold)" : r.d1 === "DNF" ? "var(--danger)" : "var(--text)" }}>{r.d1}</td>
+                  <td style={{ fontFamily: "var(--font-mono)", color: r.d2 === "P1" ? "var(--gold)" : r.d2 === "DNF" ? "var(--danger)" : "var(--text)" }}>{r.d2}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
         <Standings title="Drivers' Championship" rows={result.drivers.map((s, i) => ({ pos: i + 1, label: `${s.entry.flag} ${s.entry.name}`, sub: s.entry.team, pts: s.points, mine: s.entry.isPlayer }))} />
         <Standings title="Constructors' Championship" rows={result.constructors.map((t, i) => ({ pos: i + 1, label: t.team, sub: "", pts: t.points, mine: t.team === teamName }))} />
-        <div className="card" style={{ padding: "1.1rem", textAlign: "center", display: "grid", gap: 10 }}>
-          <ScoreSubmit game={GAME} score={score} unit="pts" />
+
+        <div className="card" style={{ padding: "1.1rem", textAlign: "center", display: "grid", gap: 12 }}>
+          <ShareButtons
+            card={{ eyebrow: "Season Simulator", big: `${myWins}/${ROUNDS}`, headline: perfect ? "PERFECT SEASON" : won ? "CHAMPIONS" : "SEASON DONE", lines: [teamName, `${d1.year} ${d1.name} & ${d2.year} ${d2.name}`, `${car.year} ${car.name}`, `${points} championship points`], path: "/games/season" }}
+            caption={`I won ${myWins}/${ROUNDS} races as ${teamName} in the F1Slam Season Simulator${perfect ? " — a PERFECT season! 🏆🏁" : " 🏎️"} Can you go perfect?`}
+          />
+          <ScoreSubmit game={GAME} score={points} unit="pts" />
           <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
             <button className="btn btn-primary" onClick={reset}>New season</button>
             <a className="btn" href="/leaderboard">🏆 Leaderboard</a>
@@ -140,13 +204,19 @@ export default function SeasonSimulator() {
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
         {["Driver 1", "Driver 2", "Car", "Sponsor", "Build"].map((lbl, i) => (
           <span key={lbl} className="chip" style={{ borderColor: i + 1 === stepNum ? "var(--accent)" : "var(--border)", color: i + 1 < stepNum ? "var(--accent-2)" : i + 1 === stepNum ? "var(--accent)" : "var(--muted)" }}>
             {i + 1 < stepNum ? "✓ " : ""}{lbl}
           </span>
         ))}
+        <button className="chip" onClick={toggleMute} aria-label={muted ? "Unmute" : "Mute"} style={{ marginLeft: "auto", cursor: "pointer", color: "var(--text)" }}>
+          {muted ? "🔇" : "🔊"}
+        </button>
       </div>
+      <p style={{ color: "var(--muted)", margin: 0, fontSize: ".88rem" }}>
+        🎯 The goal: <strong style={{ color: "var(--text)" }}>win every race</strong> for a perfect season — the ultimate Slam.
+      </p>
 
       {(d1 || car || sponsor) && (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", fontSize: ".82rem" }}>
@@ -206,7 +276,11 @@ function useSpin<T>(make: () => T[]) {
   function spin() {
     setPhase("spinning"); setOpts(make());
     let n = 0;
-    timer.current = setInterval(() => { setFlash((f) => f + 1); if (++n > 12) { if (timer.current) clearInterval(timer.current); setPhase("done"); } }, 70);
+    timer.current = setInterval(() => {
+      setFlash((f) => f + 1);
+      tick();
+      if (++n > 12) { if (timer.current) clearInterval(timer.current); setPhase("done"); settle(); }
+    }, 70);
   }
   useEffect(() => () => { if (timer.current) clearInterval(timer.current); }, []);
   return { phase, opts, flash, spin };

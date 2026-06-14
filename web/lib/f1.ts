@@ -13,6 +13,8 @@ export interface DriverSeason {
   points: number;
   wins: number;
   poles: number;
+  podiums: number;
+  races: number;
   position: number;
   rating: number; // 0..100 strength that season (used by the games)
 }
@@ -21,11 +23,29 @@ export interface DriverCareer {
   seasons: number;
   wins: number;
   poles: number;
+  podiums: number;
+  races: number;
   points: number;
   championships: number;
-  bestPos: number;
+  bestPos: number | null;
   firstYear: number;
   lastYear: number;
+}
+
+/** A single race result row (lives in history.json, read only at build time). */
+export interface RaceRow {
+  season: number;
+  round: number;
+  race: string;
+  circuit: string;
+  circuitId: string | null;
+  country: string;
+  date: string | null;
+  grid: number | null;
+  position: number | null;
+  points: number;
+  status: string;
+  dnf: boolean;
 }
 
 export interface Driver {

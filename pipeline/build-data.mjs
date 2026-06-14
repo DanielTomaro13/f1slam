@@ -105,47 +105,82 @@ async function main() {
   const constructors = new Map(); // constructorId -> identity + bySeason[]
   const standings = {};
   const calendars = {};
+  const history = new Map();      // driverId -> [race-by-race rows] (build-only, → history.json)
+
+  const isFinished = (status) => status === "Finished" || /^\+\d+ Lap/.test(status);
+  const posNum = (r) => (/^\d+$/.test(r.positionText) ? Number(r.positionText) : null);
+
+  // fetch every result for a season (paginated)
+  async function allResults(y) {
+    const races = [];
+    let offset = 0, total = 1;
+    while (offset < total) {
+      const d = await get(`${ERG}/${y}/results.json?limit=100&offset=${offset}`);
+      total = Number(d?.MRData?.total || 0);
+      const rs = d?.MRData?.RaceTable?.Races || [];
+      races.push(...rs);
+      offset += 100;
+      if (!rs.length) break;
+    }
+    // Ergast splits a race across pages; merge results by round
+    const byRound = new Map();
+    for (const r of races) {
+      const k = r.round;
+      if (!byRound.has(k)) byRound.set(k, { ...r, Results: [] });
+      byRound.get(k).Results.push(...(r.Results || []));
+    }
+    return [...byRound.values()].sort((a, b) => Number(a.round) - Number(b.round));
+  }
 
   for (const year of years) {
     const y = String(year);
-    // driver standings
     const ds = listFrom(await get(`${ERG}/${y}/driverStandings.json?limit=100`), "StandingsTable", "DriverStandings");
-    // constructor standings
     const cs = listFrom(await get(`${ERG}/${y}/constructorStandings.json?limit=100`), "StandingsTable", "ConstructorStandings");
-    // winners + poles
-    const winRaces = (await get(`${ERG}/${y}/results/1.json?limit=100`))?.MRData?.RaceTable?.Races || [];
-    const poleRaces = (await get(`${ERG}/${y}/qualifying/1.json?limit=100`))?.MRData?.RaceTable?.Races || [];
+    const raceRows = await allResults(y);
 
-    // per-season pole counts by driverId
-    const poleCount = new Map();
-    for (const r of poleRaces) {
-      const id = r.QualifyingResults?.[0]?.Driver?.driverId;
-      if (id) poleCount.set(id, (poleCount.get(id) || 0) + 1);
+    // per-season derived stats from full results
+    const poleCount = new Map(), podiumCount = new Map(), raceCount = new Map(), dnfCount = new Map();
+    for (const race of raceRows) {
+      for (const res of race.Results || []) {
+        const id = res.Driver.driverId;
+        raceCount.set(id, (raceCount.get(id) || 0) + 1);
+        if (Number(res.grid) === 1) poleCount.set(id, (poleCount.get(id) || 0) + 1);
+        const p = posNum(res);
+        if (p && p <= 3) podiumCount.set(id, (podiumCount.get(id) || 0) + 1);
+        if (!isFinished(res.status)) dnfCount.set(id, (dnfCount.get(id) || 0) + 1);
+        // race-by-race history row
+        const list = history.get(id) || [];
+        list.push({
+          season: year, round: Number(race.round), race: race.raceName,
+          circuit: race.Circuit?.circuitName || "", circuitId: race.Circuit?.circuitId || null,
+          country: race.Circuit?.Location?.country || "", date: race.date || null,
+          grid: Number(res.grid) || null, position: p, points: Number(res.points) || 0,
+          status: res.status, dnf: !isFinished(res.status),
+        });
+        history.set(id, list);
+      }
     }
 
     const maxDpts = Math.max(1, ...ds.map((x) => Number(x.points)));
     const maxCpts = Math.max(1, ...cs.map((x) => Number(x.points)));
 
-    // drivers this season
     const dRows = [];
     for (const row of ds) {
       const d = row.Driver, con = row.Constructors?.[row.Constructors.length - 1];
-      const id = d.driverId;
-      const conId = con?.constructorId || "";
+      const id = d.driverId, conId = con?.constructorId || "";
       const pts = Number(row.points), wins = Number(row.wins), pos = Number(row.position);
-      const poles = poleCount.get(id) || 0;
-      const rating = Math.round(Math.min(99, 58 + (pts / maxDpts) * 28 + wins * 1.4 + (pos === 1 ? 8 : 0) + Math.min(6, poles)));
+      const poles = poleCount.get(id) || 0, podiums = podiumCount.get(id) || 0, races = raceCount.get(id) || 0;
+      const rating = Math.round(Math.min(99, 58 + (pts / maxDpts) * 28 + wins * 1.4 + (pos === 1 ? 8 : 0) + Math.min(6, poles) + Math.min(4, podiums * 0.5)));
       const colour = teamColour(conId);
       if (!drivers.has(id)) drivers.set(id, {
         id, code: d.code || d.familyName.slice(0, 3).toUpperCase(), first: d.givenName, last: d.familyName,
         name: `${d.givenName} ${d.familyName}`, nationality: d.nationality, country: natCountry(d.nationality),
         flag: flag(d.nationality), headshot: null, bySeason: [],
       });
-      drivers.get(id).bySeason.push({ year, team: con?.name || "—", teamColour: colour, points: pts, wins, poles, position: pos, rating });
+      drivers.get(id).bySeason.push({ year, team: con?.name || "—", teamColour: colour, points: pts, wins, poles, podiums, races, position: pos, rating });
       dRows.push({ driverId: id, code: drivers.get(id).code, name: drivers.get(id).name, flag: drivers.get(id).flag, team: con?.name || "—", teamColour: colour, points: pts, wins, position: pos });
     }
 
-    // constructors this season
     const cRows = [];
     for (const row of cs) {
       const c = row.Constructor, id = c.constructorId;
@@ -161,34 +196,35 @@ async function main() {
 
     standings[y] = { drivers: dRows, constructors: cRows };
 
-    // calendar (winners). circuitKey unknown here (added for current season from OpenF1 below)
-    calendars[y] = winRaces.map((r) => {
-      const w = r.Results?.[0];
+    // calendar with winners (winner = race position 1)
+    calendars[y] = raceRows.map((r) => {
+      const w = (r.Results || []).find((x) => x.positionText === "1");
       return {
         round: Number(r.round), name: r.raceName, country: r.Circuit?.Location?.country || "",
         countryCode: null, circuit: r.Circuit?.circuitName || "", circuitId: r.Circuit?.circuitId || null,
         circuitKey: null, location: r.Circuit?.Location?.locality || "", date: r.date ? `${r.date}T${r.time || "13:00:00Z"}` : null,
-        raceDate: r.date ? `${r.date}T${r.time || "13:00:00Z"}` : null, winner: w ? (w.Driver.code || `${w.Driver.familyName}`.slice(0,3).toUpperCase()) : null,
+        raceDate: r.date ? `${r.date}T${r.time || "13:00:00Z"}` : null,
+        winner: w ? (w.Driver.code || `${w.Driver.familyName}`.slice(0, 3).toUpperCase()) : null,
         winnerName: w ? `${w.Driver.givenName} ${w.Driver.familyName}` : null,
       };
     }).sort((a, b) => a.round - b.round);
 
-    if (year % 10 === 0 || year >= currentSeason - 3) console.log(`  ${y}: ${ds.length} drivers, ${cs.length} teams, ${winRaces.length} races`);
+    if (year % 10 === 0 || year >= currentSeason - 3) console.log(`  ${y}: ${ds.length} drivers, ${cs.length} teams, ${raceRows.length} races`);
   }
 
   // finalize driver/constructor career aggregates
   const driverList = [...drivers.values()].map((d) => {
     d.bySeason.sort((a, b) => Number(b.year) - Number(a.year));
-    const wins = d.bySeason.reduce((s, x) => s + x.wins, 0);
-    const poles = d.bySeason.reduce((s, x) => s + x.poles, 0);
-    const points = Math.round(d.bySeason.reduce((s, x) => s + x.points, 0) * 10) / 10;
+    const sum = (k) => d.bySeason.reduce((s, x) => s + (x[k] || 0), 0);
+    const wins = sum("wins"), poles = sum("poles"), podiums = sum("podiums"), races = sum("races");
+    const points = Math.round(sum("points") * 10) / 10;
     const championships = d.bySeason.filter((x) => x.position === 1).length;
     const bestPos = Math.min(...d.bySeason.map((x) => x.position).filter((p) => p != null)) || null;
     const latest = d.bySeason[0];
     return {
       id: d.id, code: d.code, first: d.first, last: d.last, name: d.name, nationality: d.nationality,
       country: d.country, flag: d.flag, headshot: d.headshot, latestTeam: latest.team, latestTeamColour: latest.teamColour,
-      career: { seasons: d.bySeason.length, wins, poles, points, championships, bestPos, firstYear: Number(d.bySeason[d.bySeason.length - 1].year), lastYear: Number(latest.year) },
+      career: { seasons: d.bySeason.length, wins, poles, podiums, races, points, championships, bestPos, firstYear: Number(d.bySeason[d.bySeason.length - 1].year), lastYear: Number(latest.year) },
       bySeason: d.bySeason,
     };
   }).sort((a, b) => b.career.championships - a.career.championships || b.career.wins - a.career.wins);
@@ -272,8 +308,17 @@ async function main() {
 
   const file = join(OUT_DIR, "f1.json");
   writeFileSync(file, JSON.stringify(out));
+
+  // race-by-race history → separate file OUTSIDE public/ (read only at build
+  // time by driver pages; not shipped to clients).
+  const hist = {};
+  for (const [id, rows] of history) hist[id] = rows.sort((a, b) => b.season - a.season || b.round - a.round);
+  const histFile = join(__dirname, "..", "web", "history.json");
+  writeFileSync(histFile, JSON.stringify(hist));
+
+  const totalRows = Object.values(hist).reduce((s, r) => s + r.length, 0);
   console.log(`\nWrote ${driverList.length} drivers, ${constructorList.length} constructors, ${years.length} seasons, ${Object.keys(tracks).length} tracks`);
-  console.log(`Size: ${(JSON.stringify(out).length / 1024).toFixed(0)} KB · calls: ${calls}`);
+  console.log(`f1.json: ${(JSON.stringify(out).length / 1024).toFixed(0)} KB · history.json: ${(JSON.stringify(hist).length / 1024).toFixed(0)} KB (${totalRows} race rows) · calls: ${calls}`);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

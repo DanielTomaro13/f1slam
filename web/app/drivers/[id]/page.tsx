@@ -1,11 +1,12 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { serverF1 } from "@/lib/serverdata";
+import { serverF1, serverHistory } from "@/lib/serverdata";
 import { driverById } from "@/lib/f1";
 import { pageMeta, breadcrumbJsonLd } from "@/lib/seo";
 import { flagEmoji } from "@/lib/format";
 import JsonLd from "@/components/JsonLd";
+import DriverRaceHistory from "@/components/DriverRaceHistory";
 
 interface Params {
   id: string;
@@ -60,6 +61,7 @@ export default async function DriverPage({
   if (!d) notFound();
 
   const c = d.career;
+  const history = serverHistory(d.id);
 
   return (
     <div style={{ display: "grid", gap: "1.5rem" }}>
@@ -148,8 +150,10 @@ export default async function DriverPage({
       <section className="grid-cards">
         <StatCard label="World titles" value={c.championships} gold />
         <StatCard label="Race wins" value={c.wins} gold />
+        <StatCard label="Podiums" value={c.podiums} />
         <StatCard label="Pole positions" value={c.poles} />
         <StatCard label="Career points" value={c.points} />
+        <StatCard label="Race starts" value={c.races} />
         <StatCard label="Seasons" value={c.seasons} />
         <StatCard label="Best championship" value={c.bestPos ? `P${c.bestPos}` : "—"} />
       </section>
@@ -200,6 +204,15 @@ export default async function DriverPage({
           </table>
         </div>
       </section>
+
+      {history.length > 0 && (
+        <section>
+          <h2 style={{ fontSize: "1.3rem", fontWeight: 800, textTransform: "uppercase", fontFamily: "var(--font-cond)" }}>
+            Race by race
+          </h2>
+          <DriverRaceHistory races={history} />
+        </section>
+      )}
 
       <p style={{ color: "var(--muted)" }}>
         Want more {d.first}?{" "}

@@ -21,6 +21,7 @@ export interface GameDriver {
   championships: number;
   wins: number;
   poles: number;
+  podiums: number;
   points: number;
   seasons: number;
   firstYear: number;
@@ -71,7 +72,7 @@ export async function loadGamesData(): Promise<GamesData> {
   const players: GameDriver[] = f1.drivers.map((d) => ({
     id: d.id, name: d.name, code: d.code, flag: d.flag, country: d.country, headshot: d.headshot,
     team: d.latestTeam, teamColour: d.latestTeamColour, championships: d.career.championships, wins: d.career.wins, poles: d.career.poles,
-    points: d.career.points, seasons: d.career.seasons, firstYear: d.career.firstYear, lastYear: d.career.lastYear,
+    podiums: d.career.podiums, points: d.career.points, seasons: d.career.seasons, firstYear: d.career.firstYear, lastYear: d.career.lastYear,
   }));
 
   // driver-seasons: any season where the driver was a genuine competitor

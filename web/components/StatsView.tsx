@@ -49,6 +49,7 @@ export default function StatsView({ data }: { data: F1Data }) {
       return [
         drv("🏆 Most titles", (d) => d.career.championships),
         drv("🏁 Most wins", (d) => d.career.wins),
+        drv("🥂 Most podiums", (d) => d.career.podiums),
         drv("⚡ Most poles", (d) => d.career.poles),
         drv("📊 Most points", (d) => d.career.points),
         { key: "ctor-titles", title: "🏆 Most constructor titles", rows: constructorTitles },
