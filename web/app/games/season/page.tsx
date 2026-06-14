@@ -17,12 +17,13 @@ export default function Page() {
       slug="season"
       emoji="🏆"
       title="Season Simulator"
-      intro="Sign two real drivers, build your car, and simulate a full Formula 1 season against the grid. Driver skill and car performance are drawn from real career data — can you take the title?"
+      intro="Spin for your two drivers, your engineering team and your title sponsor, then develop the car and simulate a full Formula 1 season against the grid. It's a gamble — the spins decide what you've got to work with. Can you take the title anyway?"
       howTo={[
-        "Pick two drivers for your team from the real grid.",
-        "Spend your development budget across chassis, power unit, aero and reliability — pace wins races, but unreliable cars don't finish.",
-        "Simulate the season and see the full drivers' and constructors' championships.",
-        "Win the title to be crowned champions — a perfect, race-every-win season is the ultimate Slam.",
+        "Spin for your first driver — the wheel deals you five from the real grid, and you pick one (no take-backs). Spin again for your second.",
+        "Spin for an engineering team — each gives a different base car (some fast, some reliable, some a gamble).",
+        "Spin for a title sponsor — the bigger the backer, the bigger your development budget.",
+        "Spend that budget improving the car across chassis, power unit, aero and reliability — pace wins races, but unreliable cars don't finish.",
+        "Simulate the season. Win the title to be crowned champions — a perfect, win-every-race season is the ultimate Slam.",
       ]}
     >
       <SeasonSimulator />
