@@ -1,0 +1,10 @@
+{
+  "name": "pipeline",
+  "private": true,
+  "version": "1.0.0",
+  "description": "F1Slam data pipeline — builds the static F1 snapshot from the OpenF1 API.",
+  "type": "module",
+  "scripts": {
+    "build": "node build-data.mjs"
+  }
+}

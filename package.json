@@ -1,0 +1,16 @@
+{
+  "name": "f1slam",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Formula 1 stats, championship standings, the race calendar and addictive F1 mini-games — chase the perfect Grand Slam. Part of the 0 Series.",
+  "workspaces": [
+    "pipeline",
+    "web"
+  ],
+  "scripts": {
+    "data": "npm run build -w pipeline",
+    "dev": "npm run dev -w web",
+    "build": "npm run build -w web",
+    "start": "npm run start -w web"
+  }
+}
