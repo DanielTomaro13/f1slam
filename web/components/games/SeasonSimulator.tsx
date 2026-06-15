@@ -1,17 +1,16 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { loadGamesData, type SeasonPick, type CarPick } from "@/lib/games-data";
 import { recordScore } from "@/lib/progress";
 import { carPerf, simulateSeason, type Entry, type CarBuild } from "@/lib/sim";
 import ScoreSubmit from "@/components/games/ScoreSubmit";
 import ShareButtons from "@/components/ShareButtons";
 import Confetti from "@/components/Confetti";
-import { tick, settle, tap, fanfare, isMuted, setMuted } from "@/lib/sound";
+import { fanfare, settle, tap, isMuted, setMuted } from "@/lib/sound";
+import { DriverSpin, CarSpin, SponsorSpin, sample, type Sponsor } from "@/components/games/Spins";
 
 const GAME = "season-sim";
 const ROUNDS = 24;
-const DRIVER_OPTS = 5;
-const CAR_OPTS = 3;
 
 type Cat = "chassis" | "engine" | "aero" | "reliability";
 const CATS: { key: Cat; label: string; emoji: string; hint: string }[] = [
@@ -21,31 +20,24 @@ const CATS: { key: Cat; label: string; emoji: string; hint: string }[] = [
   { key: "reliability", label: "Reliability", emoji: "🔧", hint: "Fewer DNFs — but no pace" },
 ];
 
-interface Sponsor { name: string; emoji: string; blurb: string; budget: number }
+// sponsor.value = development budget for the Season Simulator
 const SPONSORS: Sponsor[] = [
-  { name: "Crypto Exchange", emoji: "🪙", blurb: "Volatile money, enormous cheque.", budget: 120 },
-  { name: "Oil Major", emoji: "🛢️", blurb: "Old money, deep pockets.", budget: 115 },
-  { name: "Streaming Giant", emoji: "📺", blurb: "Wants the drama — and pays for it.", budget: 100 },
-  { name: "Telecoms Titan", emoji: "📡", blurb: "Coverage everywhere, including your wallet.", budget: 92 },
-  { name: "Global Energy", emoji: "🥤", blurb: "Gives you wings and a solid budget.", budget: 86 },
-  { name: "Airline", emoji: "🛫", blurb: "First-class backing.", budget: 80 },
-  { name: "Startup Unicorn", emoji: "🦄", blurb: "Burning VC cash — your gain.", budget: 72 },
-  { name: "Fashion House", emoji: "👗", blurb: "Style and a respectable sum.", budget: 64 },
-  { name: "Luxury Watches", emoji: "⌚", blurb: "Precision money.", budget: 56 },
-  { name: "National Lottery", emoji: "🎟️", blurb: "Someone's got to win.", budget: 46 },
-  { name: "Family Money", emoji: "👑", blurb: "A modest windfall from the relatives.", budget: 36 },
-  { name: "Hardware Store", emoji: "🔩", blurb: "Local, loyal — and a little tight.", budget: 22 },
+  { name: "Crypto Exchange", emoji: "🪙", blurb: "Volatile money, enormous cheque.", value: 120 },
+  { name: "Oil Major", emoji: "🛢️", blurb: "Old money, deep pockets.", value: 115 },
+  { name: "Streaming Giant", emoji: "📺", blurb: "Wants the drama — and pays for it.", value: 100 },
+  { name: "Telecoms Titan", emoji: "📡", blurb: "Coverage everywhere, including your wallet.", value: 92 },
+  { name: "Global Energy", emoji: "🥤", blurb: "Gives you wings and a solid budget.", value: 86 },
+  { name: "Airline", emoji: "🛫", blurb: "First-class backing.", value: 80 },
+  { name: "Startup Unicorn", emoji: "🦄", blurb: "Burning VC cash — your gain.", value: 72 },
+  { name: "Fashion House", emoji: "👗", blurb: "Style and a respectable sum.", value: 64 },
+  { name: "Luxury Watches", emoji: "⌚", blurb: "Precision money.", value: 56 },
+  { name: "National Lottery", emoji: "🎟️", blurb: "Someone's got to win.", value: 46 },
+  { name: "Family Money", emoji: "👑", blurb: "A modest windfall from the relatives.", value: 36 },
+  { name: "Hardware Store", emoji: "🔩", blurb: "Local, loyal — and a little tight.", value: 22 },
 ];
 
 const STAGES = ["d1", "d2", "car", "sponsor", "build", "result"] as const;
 type Stage = (typeof STAGES)[number];
-
-function sample<T>(arr: T[], n: number, exclude: (x: T) => boolean = () => false): T[] {
-  const pool = arr.filter((x) => !exclude(x));
-  const out: T[] = [];
-  while (out.length < n && pool.length) out.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
-  return out;
-}
 
 function aiCar(rating: number, wins: number): number {
   return Math.round(Math.min(96, 60 + (rating - 60) * 0.72 + (wins > 0 ? 6 : 0)));
@@ -76,21 +68,20 @@ export default function SeasonSimulator() {
 
   const base = car ? Math.round(car.strength * 0.6 + 30) : 55; // map strength→base car ~48..89
   function pickDriver(p: SeasonPick) {
-    tap();
     if (stage === "d1") { setD1(p); setStage("d2"); }
     else { setD2(p); setStage("car"); }
   }
-  function pickCar(c: CarPick) { tap(); setCar(c); const b = Math.round(c.strength * 0.6 + 30); setBuild({ chassis: b, engine: b, aero: b, reliability: b }); setStage("sponsor"); }
-  function pickSponsor(s: Sponsor) { tap(); setSponsor(s); setStage("build"); }
+  function pickCar(c: CarPick) { setCar(c); const b = Math.round(c.strength * 0.6 + 30); setBuild({ chassis: b, engine: b, aero: b, reliability: b }); setStage("sponsor"); }
+  function pickSponsor(s: Sponsor) { setSponsor(s); setStage("build"); }
 
   const spent = CATS.reduce((s, c) => s + (build[c.key] - base), 0);
-  const remaining = (sponsor?.budget ?? 0) - spent;
+  const remaining = (sponsor?.value ?? 0) - spent;
 
   function setCat(k: Cat, v: number) {
     if (!sponsor) return;
     v = Math.max(base, Math.min(100, v));
     const otherSpent = CATS.reduce((s, c) => s + (c.key === k ? 0 : build[c.key] - base), 0);
-    if (otherSpent + (v - base) > sponsor.budget) v = base + (sponsor.budget - otherSpent);
+    if (otherSpent + (v - base) > sponsor.value) v = base + (sponsor.value - otherSpent);
     setBuild((b) => ({ ...b, [k]: v }));
   }
 
@@ -108,7 +99,7 @@ export default function SeasonSimulator() {
       id: p.key, name: p.name, code: p.code, team: `${p.year} ${p.team}`, colour: p.teamColour,
       driver: p.rating, car: aiCar(p.rating, p.wins), reliability: 0.88, isPlayer: false, flag: p.flag, headshot: p.headshot,
     } as Entry));
-    const seed = (carRating * 7 + (sponsor?.budget ?? 0) + d1.rating * 3 + d2.rating) >>> 0;
+    const seed = (carRating * 7 + (sponsor?.value ?? 0) + d1.rating * 3 + d2.rating) >>> 0;
     setResult(simulateSeason([...playerEntries, ...ai], ROUNDS, seed));
     setStage("result");
   }
@@ -223,14 +214,14 @@ export default function SeasonSimulator() {
           {d1 && <span className="chip">👤 {d1.year} {d1.flag} {d1.name}</span>}
           {d2 && <span className="chip">👤 {d2.year} {d2.flag} {d2.name}</span>}
           {car && <span className="chip" style={{ borderColor: car.colour }}>🏎️ {car.year} {car.name}</span>}
-          {sponsor && <span className="chip" style={{ color: "var(--gold)", borderColor: "var(--gold)" }}>💵 {sponsor.name} · {sponsor.budget}</span>}
+          {sponsor && <span className="chip" style={{ color: "var(--gold)", borderColor: "var(--gold)" }}>💵 {sponsor.name} · {sponsor.value}</span>}
         </div>
       )}
 
       {stage === "d1" && <DriverSpin pool={data.driverSeasons} exclude={[]} onPick={pickDriver} which="first" key="d1" />}
       {stage === "d2" && <DriverSpin pool={data.driverSeasons} exclude={d1 ? [d1.driverId] : []} onPick={pickDriver} which="second" key="d2" />}
       {stage === "car" && <CarSpin pool={data.carSeasons} onPick={pickCar} />}
-      {stage === "sponsor" && <SponsorSpin onPick={pickSponsor} />}
+      {stage === "sponsor" && <SponsorSpin sponsors={SPONSORS} onPick={pickSponsor} unit="budget" />}
 
       {stage === "build" && car && sponsor && (
         <>
@@ -243,7 +234,7 @@ export default function SeasonSimulator() {
             </span>
           </div>
           <p style={{ color: "var(--muted)", margin: 0, fontSize: ".88rem" }}>
-            The {car.year} {car.name} gives you a base car of {base}. Spend {sponsor.name}&apos;s {sponsor.budget} development points to push it further.
+            The {car.year} {car.name} gives you a base car of {base}. Spend {sponsor.name}&apos;s {sponsor.value} development points to push it further.
           </p>
           <div style={{ display: "grid", gap: 12 }}>
             {CATS.map((c) => (
@@ -264,103 +255,6 @@ export default function SeasonSimulator() {
         </>
       )}
     </div>
-  );
-}
-
-/* ---- spins ---- */
-function useSpin<T>(make: () => T[]) {
-  const [phase, setPhase] = useState<"idle" | "spinning" | "done">("idle");
-  const [opts, setOpts] = useState<T[]>([]);
-  const [flash, setFlash] = useState(0);
-  const timer = useRef<ReturnType<typeof setInterval> | null>(null);
-  function spin() {
-    setPhase("spinning"); setOpts(make());
-    let n = 0;
-    timer.current = setInterval(() => {
-      setFlash((f) => f + 1);
-      tick();
-      if (++n > 12) { if (timer.current) clearInterval(timer.current); setPhase("done"); settle(); }
-    }, 70);
-  }
-  useEffect(() => () => { if (timer.current) clearInterval(timer.current); }, []);
-  return { phase, opts, flash, spin };
-}
-
-function SpinShell({ title, subtitle, phase, onSpin, children }: { title: string; subtitle: string; phase: string; onSpin: () => void; children: React.ReactNode }) {
-  return (
-    <div style={{ display: "grid", gap: 12 }}>
-      <div>
-        <h2 style={{ margin: 0, fontSize: "1.3rem", fontWeight: 800, textTransform: "uppercase", fontFamily: "var(--font-cond)" }}>{title}</h2>
-        <p style={{ color: "var(--muted)", margin: "4px 0 0", fontSize: ".9rem" }}>{subtitle}</p>
-      </div>
-      {phase === "idle" ? <button className="btn btn-primary" onClick={onSpin} style={{ justifySelf: "start", fontSize: "1rem" }}>🎰 Spin</button> : children}
-    </div>
-  );
-}
-
-function DriverSpin({ pool, exclude, onPick, which }: { pool: SeasonPick[]; exclude: string[]; onPick: (p: SeasonPick) => void; which: string }) {
-  const { phase, opts, flash, spin } = useSpin<SeasonPick>(() => sample(pool, DRIVER_OPTS, (p) => exclude.includes(p.driverId)));
-  const shown = phase === "spinning" ? sample(pool, DRIVER_OPTS, (p) => exclude.includes(p.driverId)) : opts;
-  return (
-    <SpinShell title={`Spin for your ${which} driver`} subtitle="Five drivers from across F1 history — each rated on how they performed that very season. Pick one." phase={phase} onSpin={spin}>
-      <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))" }} key={flash}>
-        {shown.map((p) => (
-          <button key={p.key} disabled={phase === "spinning"} onClick={() => phase === "done" && onPick(p)} className="card"
-            style={{ padding: "0.9rem", textAlign: "center", cursor: phase === "done" ? "pointer" : "default", color: "var(--text)", borderTop: `3px solid ${p.teamColour}`, opacity: phase === "spinning" ? 0.55 : 1 }}>
-            {p.headshot ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={p.headshot} alt="" width={50} height={50} loading="lazy" style={{ borderRadius: 10, background: "var(--panel-2)", objectFit: "cover" }} />
-            ) : <div style={{ width: 50, height: 50, borderRadius: 10, background: "var(--panel-2)", display: "grid", placeItems: "center", margin: "0 auto", fontFamily: "var(--font-cond)" }}>{p.code}</div>}
-            <div style={{ fontWeight: 800, marginTop: 6, fontSize: ".86rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.flag} {p.name}</div>
-            <div style={{ color: "var(--muted)", fontSize: ".72rem" }}>{p.year} · {p.team}</div>
-            <div style={{ fontFamily: "var(--font-cond)", color: "var(--gold)", marginTop: 4 }}>OVR {p.rating} <span style={{ color: "var(--muted)", fontSize: ".72rem" }}>· {p.wins}W</span></div>
-          </button>
-        ))}
-      </div>
-      {phase === "spinning" && <div style={{ color: "var(--accent)", fontFamily: "var(--font-cond)", textAlign: "center" }}>Spinning…</div>}
-    </SpinShell>
-  );
-}
-
-function CarSpin({ pool, onPick }: { pool: CarPick[]; onPick: (c: CarPick) => void }) {
-  const { phase, opts, flash, spin } = useSpin<CarPick>(() => sample(pool, CAR_OPTS));
-  const shown = phase === "spinning" ? sample(pool, CAR_OPTS) : opts;
-  return (
-    <SpinShell title="Spin for a car" subtitle="Three real constructor seasons — a dominant year gives a rocket, an off year gives a dog. Pick your chassis." phase={phase} onSpin={spin}>
-      <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }} key={flash}>
-        {shown.map((c) => (
-          <button key={c.key} disabled={phase === "spinning"} onClick={() => phase === "done" && onPick(c)} className="card"
-            style={{ padding: "1rem", textAlign: "left", cursor: phase === "done" ? "pointer" : "default", color: "var(--text)", opacity: phase === "spinning" ? 0.55 : 1, borderLeft: `4px solid ${c.colour}` }}>
-            <div style={{ fontFamily: "var(--font-cond)", fontSize: "1.4rem" }}>{c.year}</div>
-            <div style={{ fontWeight: 800 }}>{c.flag} {c.name}</div>
-            <div style={{ color: "var(--muted)", fontSize: ".76rem" }}>That season: P{c.position} · {c.wins} wins · {c.points} pts</div>
-            <div style={{ fontFamily: "var(--font-cond)", color: "var(--gold)", marginTop: 6, fontSize: "1.1rem" }}>🏎️ car strength {c.strength}</div>
-          </button>
-        ))}
-      </div>
-      {phase === "spinning" && <div style={{ color: "var(--accent)", fontFamily: "var(--font-cond)", textAlign: "center" }}>Spinning…</div>}
-    </SpinShell>
-  );
-}
-
-function SponsorSpin({ onPick }: { onPick: (s: Sponsor) => void }) {
-  const { phase, opts, flash, spin } = useSpin<Sponsor>(() => sample(SPONSORS, 5));
-  const shown = phase === "spinning" ? sample(SPONSORS, 5) : opts;
-  return (
-    <SpinShell title="Spin for a title sponsor" subtitle="Your sponsor sets the development budget — a bigger backer means a faster car." phase={phase} onSpin={spin}>
-      <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))" }} key={flash}>
-        {shown.map((s) => (
-          <button key={s.name} disabled={phase === "spinning"} onClick={() => phase === "done" && onPick(s)} className="card"
-            style={{ padding: "1rem", textAlign: "left", cursor: phase === "done" ? "pointer" : "default", color: "var(--text)", opacity: phase === "spinning" ? 0.55 : 1, borderTop: "3px solid var(--gold)" }}>
-            <div style={{ fontSize: "1.6rem" }}>{s.emoji}</div>
-            <div style={{ fontWeight: 800 }}>{s.name}</div>
-            <div style={{ color: "var(--muted)", fontSize: ".78rem", minHeight: 32 }}>{s.blurb}</div>
-            <div style={{ fontFamily: "var(--font-cond)", color: "var(--gold)", marginTop: 6, fontSize: "1.1rem" }}>💵 {s.budget} budget</div>
-          </button>
-        ))}
-      </div>
-      {phase === "spinning" && <div style={{ color: "var(--accent)", fontFamily: "var(--font-cond)", textAlign: "center" }}>Spinning…</div>}
-    </SpinShell>
   );
 }
 

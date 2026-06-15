@@ -1,19 +1,20 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { loadGamesData, type GameDriver } from "@/lib/games-data";
+import { useEffect, useRef, useState } from "react";
+import { loadGamesData, type SeasonPick, type CarPick } from "@/lib/games-data";
 import { loadF1, type Round, type Track } from "@/lib/f1";
 import { recordScore } from "@/lib/progress";
-import {
-  careerRating, carPerf, simulateRace, mulberry32, type Entry, type CarBuild,
-} from "@/lib/sim";
+import { carPerf, simulateRace, mulberry32, type Entry } from "@/lib/sim";
 import ScoreSubmit from "@/components/games/ScoreSubmit";
 import ShareButtons from "@/components/ShareButtons";
 import Confetti from "@/components/Confetti";
 import TrackMap from "@/components/TrackMap";
+import { DriverSpin, CarSpin, SponsorSpin, sample, type Sponsor } from "@/components/games/Spins";
+import { fanfare, settle, isMuted, setMuted, tap } from "@/lib/sound";
 
 const GAME = "career";
 const ROUNDS = 12;
-const START_MONEY = 70; // $m
+const UPGRADE_STEP = 5;
+const UPGRADE_COST = 6; // $m per +5
 
 type Cat = "chassis" | "engine" | "aero" | "reliability";
 const CATS: { key: Cat; label: string; emoji: string }[] = [
@@ -22,204 +23,197 @@ const CATS: { key: Cat; label: string; emoji: string }[] = [
   { key: "aero", label: "Aero", emoji: "🪽" },
   { key: "reliability", label: "Reliability", emoji: "🔧" },
 ];
-const UPGRADE_STEP = 5;
-const UPGRADE_COST = 5; // $m per +5
+
+// sponsor.value = starting money ($m)
+const SPONSORS: Sponsor[] = [
+  { name: "Crypto Exchange", emoji: "🪙", blurb: "Volatile money, enormous cheque.", value: 140 },
+  { name: "Oil Major", emoji: "🛢️", blurb: "Old money, deep pockets.", value: 130 },
+  { name: "Streaming Giant", emoji: "📺", blurb: "Wants the drama — and pays for it.", value: 115 },
+  { name: "Telecoms Titan", emoji: "📡", blurb: "Coverage everywhere, including your wallet.", value: 100 },
+  { name: "Global Energy", emoji: "🥤", blurb: "Gives you wings and a healthy float.", value: 88 },
+  { name: "Airline", emoji: "🛫", blurb: "First-class backing.", value: 76 },
+  { name: "Startup Unicorn", emoji: "🦄", blurb: "Burning VC cash — your gain.", value: 64 },
+  { name: "Fashion House", emoji: "👗", blurb: "Style and a respectable sum.", value: 54 },
+  { name: "Luxury Watches", emoji: "⌚", blurb: "Precision money.", value: 46 },
+  { name: "National Lottery", emoji: "🎟️", blurb: "Someone's got to win.", value: 38 },
+  { name: "Family Money", emoji: "👑", blurb: "A modest windfall from the relatives.", value: 30 },
+  { name: "Hardware Store", emoji: "🔩", blurb: "Local, loyal — and a little tight.", value: 20 },
+];
 
 type GEvent = {
-  emoji: string; title: string; desc: string;
+  emoji: string; title: string; desc: string; weight: number;
   kind: "auto" | "choice";
-  delta?: number;                 // auto money change
-  carBoost?: Partial<Record<Cat, number>>;
-  choice?: { yes: string; no: string; stake: number; winChance: number; reward: number };
+  money?: [number, number];          // random money delta range
+  carBoost?: Partial<Record<Cat, number>>; // can be negative (damage)
+  choice?: { yes: string; no: string };
 };
 
-function rollEvent(rng: () => number, money: number): GEvent | null {
-  if (rng() < 0.25) return null; // some weekends are quiet
-  const events: GEvent[] = [
-    { emoji: "💰", title: "Title sponsor signs on", desc: "A backer loves the project and writes a cheque.", kind: "auto", delta: 8 + Math.floor(rng() * 10) },
-    { emoji: "👑", title: "Long-lost inheritance", desc: "A distant relative leaves you a surprising sum.", kind: "auto", delta: 12 + Math.floor(rng() * 14) },
-    { emoji: "🍀", title: "Lucky windfall", desc: "An old investment finally paid off.", kind: "auto", delta: 6 + Math.floor(rng() * 8) },
-    { emoji: "🏭", title: "Wind-tunnel breakthrough", desc: "The aero team found free downforce.", kind: "auto", carBoost: { aero: 6 } },
-    { emoji: "⚙️", title: "Engine mapping gains", desc: "A clever tweak unlocks more power.", kind: "auto", carBoost: { engine: 5 } },
-    { emoji: "📉", title: "Sponsor pulls out", desc: "A backer gets cold feet and walks.", kind: "auto", delta: -(7 + Math.floor(rng() * 9)) },
-    { emoji: "⚖️", title: "FIA fine", desc: "A technical infringement costs you.", kind: "auto", delta: -(5 + Math.floor(rng() * 7)) },
-    { emoji: "🛠️", title: "Reliability recall", desc: "A faulty part must be replaced across the fleet.", kind: "auto", delta: -(4 + Math.floor(rng() * 6)), carBoost: { reliability: 4 } },
-    { emoji: "🎰", title: "High-roller night", desc: "An investor invites you to the casino.", kind: "choice", choice: { yes: "Place the bet", no: "Walk away", stake: Math.min(money, 10 + Math.floor(rng() * 12)), winChance: 0.45, reward: 2.2 } },
-    { emoji: "🧲", title: "Star aerodynamicist available", desc: "Poach them for a serious aero gain — at a price.", kind: "choice", choice: { yes: "Hire (−$15m, +9 aero)", no: "Pass", stake: 15, winChance: 1, reward: 0 } },
-  ];
-  return events[Math.floor(rng() * events.length)];
-}
+// The paddock is a harsh place — most weeks something goes wrong. Bad events are
+// weighted higher than good ones, and several knock the car backwards.
+const EVENTS: GEvent[] = [
+  // —— good (rare, modest) ——
+  { emoji: "💰", title: "Minor sponsor boost", desc: "A backer chips in a little extra.", weight: 4, kind: "auto", money: [4, 9] },
+  { emoji: "🏭", title: "Wind-tunnel gain", desc: "The aero team found a little downforce.", weight: 4, kind: "auto", carBoost: { aero: 4 } },
+  { emoji: "⚙️", title: "Engine mapping tweak", desc: "A clever map unlocks a touch more power.", weight: 4, kind: "auto", carBoost: { engine: 3 } },
+  { emoji: "🍀", title: "Lucky break", desc: "An old investment finally paid off.", weight: 4, kind: "auto", money: [5, 10] },
+  // —— bad: money (common) ——
+  { emoji: "💸", title: "Sponsor walks", desc: "A backer gets cold feet and pulls the cheque.", weight: 6, kind: "auto", money: [-18, -9] },
+  { emoji: "⚖️", title: "FIA fine", desc: "A technical infringement costs you dearly.", weight: 5, kind: "auto", money: [-13, -6] },
+  { emoji: "📉", title: "Budget overrun", desc: "The development bill came in way over.", weight: 5, kind: "auto", money: [-11, -5] },
+  { emoji: "🗞️", title: "Bad press", desc: "A PR mess scares off a partner.", weight: 4, kind: "auto", money: [-9, -4] },
+  // —— bad: car damage (the painful ones) ——
+  { emoji: "💥", title: "Practice crash", desc: "Your driver binned it in practice — chassis damage and a repair bill.", weight: 6, kind: "auto", carBoost: { chassis: -7 }, money: [-12, -6] },
+  { emoji: "🔧", title: "Engine blow-up", desc: "A power unit let go on the dyno. Penalty parts cost pace.", weight: 5, kind: "auto", carBoost: { engine: -6 }, money: [-9, -4] },
+  { emoji: "🛞", title: "Reliability gremlins", desc: "A spate of failures forces a conservative rebuild.", weight: 5, kind: "auto", carBoost: { reliability: -6 }, money: [-7, -3] },
+  { emoji: "🌧️", title: "Lost test day", desc: "Weather wiped out testing — the aero update is unvalidated.", weight: 5, kind: "auto", carBoost: { aero: -5 } },
+  { emoji: "🏚️", title: "Wind-tunnel breakdown", desc: "The tunnel went down mid-programme. Downforce regresses.", weight: 4, kind: "auto", carBoost: { aero: -4 }, money: [-6, -2] },
+  // —— choices ——
+  { emoji: "🎰", title: "High-roller night", desc: "An investor invites you to the casino. Risk it?", weight: 3, kind: "choice", choice: { yes: "Bet 15", no: "Walk away" } },
+  { emoji: "🧲", title: "Star aerodynamicist", desc: "Poach a big name for a serious aero gain — at a price.", weight: 3, kind: "choice", choice: { yes: "Hire (−18, +9 aero)", no: "Pass" } },
+];
 
-function buildField(pool: GameDriver[], picked: GameDriver[], player: Entry[]): Entry[] {
-  const used = new Set(picked.map((d) => d.id));
-  const ai = pool.filter((d) => !used.has(d.id)).slice(0, 18);
+function buildField(ai: SeasonPick[], used: Set<string>, player: Entry[]): Entry[] {
+  const pool = ai.filter((p) => !used.has(p.driverId)).slice(0, 18);
   return [
     ...player,
-    ...ai.map((d, i) => {
-      const r = careerRating(d);
-      return {
-        id: d.id, name: d.name, code: d.code, team: d.team, colour: d.teamColour,
-        driver: r, car: Math.round(Math.min(97, 62 + (r - 60) * 0.7 + (i % 3) - 1)),
-        reliability: 0.86 + Math.min(0.1, d.championships * 0.02), isPlayer: false, flag: d.flag, headshot: d.headshot,
-      } as Entry;
-    }),
+    ...pool.map((p) => ({
+      id: p.key, name: p.name, code: p.code, team: `${p.year} ${p.team}`, colour: p.teamColour,
+      driver: p.rating, car: Math.round(Math.min(96, 60 + (p.rating - 60) * 0.72 + (p.wins > 0 ? 6 : 0))),
+      reliability: 0.88, isPlayer: false, flag: p.flag, headshot: p.headshot,
+    } as Entry)),
   ];
 }
 
 export default function CareerMode() {
-  const [pool, setPool] = useState<GameDriver[]>([]);
+  const [data, setData] = useState<Awaited<ReturnType<typeof loadGamesData>> | null>(null);
   const [rounds, setRounds] = useState<Round[]>([]);
   const [tracks, setTracks] = useState<Record<string, Track>>({});
-  const [phase, setPhase] = useState<"setup" | "event" | "garage" | "racing" | "result" | "end">("setup");
+  const [phase, setPhase] = useState<"d1" | "d2" | "car" | "sponsor" | "event" | "garage" | "racing" | "result" | "end">("d1");
 
-  const [picked, setPicked] = useState<GameDriver[]>([]);
-  const [q, setQ] = useState("");
+  const [d1, setD1] = useState<SeasonPick | null>(null);
+  const [d2, setD2] = useState<SeasonPick | null>(null);
+  const [car, setCar] = useState<CarPick | null>(null);
   const [teamName, setTeamName] = useState("My Team");
-  const [build, setBuild] = useState<Record<Cat, number>>({ chassis: 62, engine: 62, aero: 58, reliability: 58 });
-  const [money, setMoney] = useState(START_MONEY);
+  const [build, setBuild] = useState<Record<Cat, number>>({ chassis: 55, engine: 55, aero: 55, reliability: 55 });
+  const [money, setMoney] = useState(0);
 
   const [round, setRound] = useState(0);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [tally, setTally] = useState<Record<string, number>>({});
   const [event, setEvent] = useState<GEvent | null>(null);
-  const [eventMsg, setEventMsg] = useState<string>("");
-  const [lastResultMsg, setLastResultMsg] = useState<string>("");
-  const [prize, setPrize] = useState(0);
+  const [eventMsg, setEventMsg] = useState("");
+  const [lastResultMsg, setLastResultMsg] = useState("");
+  const [muted, setMutedState] = useState(false);
   const rngRef = useRef<() => number>(mulberry32(1));
 
   useEffect(() => {
-    loadGamesData().then((d) => setPool(d.players));
+    loadGamesData().then(setData);
     loadF1().then((f) => { setRounds((f.calendars[String(f.currentSeason)] || []).slice(0, ROUNDS)); setTracks(f.tracks); });
+    setMutedState(isMuted());
   }, []);
 
-  const filtered = useMemo(() => {
-    const n = q.trim().toLowerCase();
-    return pool.filter((d) => !n || `${d.name} ${d.team}`.toLowerCase().includes(n)).slice(0, 40);
-  }, [pool, q]);
-
-  function toggle(d: GameDriver) {
-    setPicked((p) => p.find((x) => x.id === d.id) ? p.filter((x) => x.id !== d.id) : p.length < 2 ? [...p, d] : p);
+  function toggleMute() { const m = !muted; setMutedState(m); setMuted(m); if (!m) tap(); }
+  function playerCar() { return carPerf({ chassis: build.chassis / 100, engine: build.engine / 100, aero: build.aero / 100, reliability: build.reliability / 100 }); }
+  const playerRel = () => 0.78 + (build.reliability / 100) * 0.2;
+  const adjust = (delta: number) => setMoney((m) => Math.max(0, Math.round(m + delta)));
+  function applyBoost(boost: Partial<Record<Cat, number>>) {
+    setBuild((b) => { const nb = { ...b }; for (const k of Object.keys(boost) as Cat[]) nb[k] = Math.max(20, Math.min(100, nb[k] + (boost[k] || 0))); return nb; });
   }
 
-  function playerCar(): number {
-    return carPerf({ chassis: build.chassis / 100, engine: build.engine / 100, aero: build.aero / 100, reliability: build.reliability / 100 });
-  }
-
-  function start() {
-    rngRef.current = mulberry32((Date.now() + picked[0].wins * 131 + picked[1].championships * 17) >>> 0);
-    const car = playerCar();
-    const rel = 0.80 + (build.reliability / 100) * 0.18;
-    const player: Entry[] = picked.map((d) => ({
-      id: d.id, name: d.name, code: d.code, team: teamName, colour: "#ff5436",
-      driver: careerRating(d), car, reliability: rel, isPlayer: true, flag: d.flag, headshot: d.headshot,
+  // ---- setup spins ----
+  function pickD1(p: SeasonPick) { setD1(p); setPhase("d2"); }
+  function pickD2(p: SeasonPick) { setD2(p); setPhase("car"); }
+  function pickCarOpt(c: CarPick) { setCar(c); const base = Math.round(c.strength * 0.6 + 30); setBuild({ chassis: base, engine: base, aero: base, reliability: base }); setPhase("sponsor"); }
+  function pickSponsor(s: Sponsor) {
+    if (!d1 || !d2 || !data) return;
+    setMoney(s.value);
+    rngRef.current = mulberry32((Date.now() + d1.rating * 131 + d2.rating * 17 + s.value) >>> 0);
+    const player: Entry[] = [d1, d2].map((p) => ({
+      id: p.key, name: p.name, code: p.code, team: teamName, colour: "#ff5436",
+      driver: p.rating, car: 60, reliability: 0.85, isPlayer: true, flag: p.flag, headshot: p.headshot,
     }));
-    setEntries(buildField(pool, picked, player));
+    setEntries(buildField(data.driverSeasons, new Set([d1.driverId, d2.driverId]), player));
     setTally({});
     setRound(0);
     nextEvent();
   }
 
+  // ---- season loop ----
   function nextEvent() {
-    const ev = rollEvent(rngRef.current, money);
+    let ev: GEvent | null = null;
+    const r = rngRef.current;
+    if (r() >= 0.12) {
+      const total = EVENTS.reduce((s, e) => s + e.weight, 0);
+      let pick = r() * total;
+      for (const e of EVENTS) { pick -= e.weight; if (pick <= 0) { ev = e; break; } }
+    }
     setEvent(ev);
     setEventMsg("");
     if (ev && ev.kind === "auto") {
-      let m = money + (ev.delta || 0);
-      if (ev.carBoost) applyBoost(ev.carBoost);
-      setMoney(m);
-      setEventMsg(ev.delta ? `${ev.delta > 0 ? "+" : "−"}$${Math.abs(ev.delta)}m` : "Applied to the car.");
+      let msg = "";
+      if (ev.money) { const d = Math.round(ev.money[0] + r() * (ev.money[1] - ev.money[0])); adjust(d); msg += `${d >= 0 ? "+" : "−"}$${Math.abs(d)}m `; }
+      if (ev.carBoost) { applyBoost(ev.carBoost); const parts = Object.entries(ev.carBoost).map(([k, v]) => `${v! >= 0 ? "+" : ""}${v} ${k}`); msg += parts.join(", "); }
+      setEventMsg(msg.trim() || "Noted.");
     }
     setPhase("event");
   }
 
-  function applyBoost(boost: Partial<Record<Cat, number>>) {
-    setBuild((b) => {
-      const nb = { ...b };
-      for (const k of Object.keys(boost) as Cat[]) nb[k] = Math.min(100, nb[k] + (boost[k] || 0));
-      return nb;
-    });
-  }
-
   function resolveChoice(take: boolean) {
-    if (event?.choice && take) {
-      const c = event.choice;
+    const r = rngRef.current;
+    if (event && take) {
       if (event.title.includes("aerodynamicist")) {
-        if (money >= c.stake) { setMoney((m) => m - c.stake); applyBoost({ aero: 9 }); setEventMsg("Hired — +9 aero."); }
-        else setEventMsg("Not enough budget.");
-      } else {
-        // gamble
-        if (money >= c.stake) {
-          const win = rngRef.current() < c.winChance;
-          setMoney((m) => m - c.stake + (win ? Math.round(c.stake * c.reward) : 0));
-          setEventMsg(win ? `You won $${Math.round(c.stake * c.reward) - c.stake}m!` : `You lost $${c.stake}m.`);
-        } else setEventMsg("Not enough budget.");
+        if (money >= 18) { adjust(-18); applyBoost({ aero: 9 }); setEventMsg("Hired — +9 aero, −$18m."); }
+        else setEventMsg("Not enough money.");
+      } else { // casino
+        if (money >= 15) { const win = r() < 0.45; adjust(win ? 18 : -15); setEventMsg(win ? "You won $18m!" : "You lost $15m."); }
+        else setEventMsg("Not enough money.");
       }
     } else setEventMsg("Passed.");
-    setEvent((e) => (e ? { ...e, kind: "auto" } : e)); // collapse choice UI
-  }
-
-  function syncPlayerCar() {
-    const car = playerCar();
-    const rel = 0.80 + (build.reliability / 100) * 0.18;
-    setEntries((es) => es.map((e) => e.isPlayer ? { ...e, car, reliability: rel } : e));
+    setEvent((e) => (e ? { ...e, kind: "auto" } : e));
   }
 
   function buy(cat: Cat) {
     if (money < UPGRADE_COST || build[cat] >= 100) return;
-    setMoney((m) => m - UPGRADE_COST);
+    adjust(-UPGRADE_COST);
     setBuild((b) => ({ ...b, [cat]: Math.min(100, b[cat] + UPGRADE_STEP) }));
   }
 
-  function startRace() {
-    syncPlayerCar();
-    setPhase("racing");
-    // animation runs ~3.8s then resolve
-    setTimeout(() => resolveRace(), 3800);
-  }
+  function startRace() { setPhase("racing"); setTimeout(resolveRace, 3600); }
 
   function resolveRace() {
-    const car = playerCar();
-    const rel = 0.80 + (build.reliability / 100) * 0.18;
-    const field = entries.map((e) => e.isPlayer ? { ...e, car, reliability: rel } : e);
+    const car = playerCar(), rel = playerRel();
+    const field = entries.map((e) => (e.isPlayer ? { ...e, car, reliability: rel } : e));
     const res = simulateRace(field, rngRef.current, 0.3 + rngRef.current() * 0.25);
-    const newTally = { ...tally };
+    const nt = { ...tally };
+    res.points.forEach((pts, id) => { nt[id] = (nt[id] || 0) + pts; });
     let scored = 0, best = 99, bestName = "";
-    res.points.forEach((pts, id) => { newTally[id] = (newTally[id] || 0) + pts; });
     field.filter((e) => e.isPlayer).forEach((e) => {
       const pos = res.order.findIndex((o) => o.id === e.id) + 1;
       const dnf = res.dnf.has(e.id);
-      const pts = res.points.get(e.id) || 0;
-      scored += pts;
+      scored += res.points.get(e.id) || 0;
       if (!dnf && pos < best) { best = pos; bestName = e.name; }
     });
-    // prize money: points + result bonus
-    const reward = Math.round(scored * 1.2 + (best === 1 ? 8 : best <= 3 ? 4 : 0));
-    setMoney((m) => m + reward);
-    setPrize(reward);
-    setTally(newTally);
-    setLastResultMsg(best < 99 ? `Best finish: P${best} (${bestName}) · +${scored} pts · +$${reward}m` : `Both cars retired — no points, no prize.`);
+    const reward = Math.round(scored * 0.9 + (best === 1 ? 6 : best <= 3 ? 3 : 0));
+    adjust(reward);
+    setTally(nt);
     setEntries(field);
+    setLastResultMsg(best < 99 ? `Best finish: P${best} (${bestName}) · +${scored} pts · +$${reward}m` : "Both cars retired — no points, no prize.");
+    if (best === 1) fanfare(); else settle();
     setPhase("result");
   }
 
   function advance() {
-    if (round + 1 >= rounds.length) { finish(); return; }
-    setRound((r) => r + 1);
+    if (round + 1 >= rounds.length) { const ms = entries.filter((e) => e.isPlayer).reduce((mx, e) => Math.max(mx, tally[e.id] || 0), 0); recordScore(GAME, ms); setPhase("end"); return; }
+    setRound((x) => x + 1);
     nextEvent();
   }
 
-  function finish() {
-    const myScore = entries.filter((e) => e.isPlayer).reduce((mx, e) => Math.max(mx, tally[e.id] || 0), 0);
-    recordScore(GAME, myScore);
-    setPhase("end");
-  }
-
   function reset() {
-    setPhase("setup"); setPicked([]); setMoney(START_MONEY); setRound(0); setTally({});
-    setBuild({ chassis: 62, engine: 62, aero: 58, reliability: 58 });
+    setPhase("d1"); setD1(null); setD2(null); setCar(null); setMoney(0); setRound(0); setTally({}); setEntries([]);
+    setBuild({ chassis: 55, engine: 55, aero: 55, reliability: 55 });
   }
 
-  if (pool.length === 0 || rounds.length === 0) return <p style={{ color: "var(--muted)" }}>Loading season…</p>;
+  if (!data || rounds.length === 0) return <p style={{ color: "var(--muted)" }}>Loading the season…</p>;
 
   const r = rounds[round];
   const track = r ? tracks[String(r.circuitKey)] : null;
@@ -227,47 +221,34 @@ export default function CareerMode() {
   const myBest = standings.find((s) => s.e.isPlayer);
   const myPos = myBest ? standings.indexOf(myBest) + 1 : 0;
 
-  // ---- SETUP ----
-  if (phase === "setup") {
+  // ---- SETUP (spins) ----
+  if (phase === "d1" || phase === "d2" || phase === "car" || phase === "sponsor") {
+    const step = phase === "d1" ? 1 : phase === "d2" ? 2 : phase === "car" ? 3 : 4;
     return (
-      <div style={{ display: "grid", gap: 14 }}>
-        <p style={{ color: "var(--muted)", margin: 0 }}>
-          Sign two drivers, build a car and run a championship campaign. Manage a budget, take upgrades and
-          gambles between rounds, and watch each race play out. ({picked.length}/2 drivers)
-        </p>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {picked.map((d) => (
-            <span key={d.id} className="chip" style={{ borderColor: "var(--accent)", color: "var(--text)" }}>
-              {d.flag} {d.name} <button onClick={() => toggle(d)} style={{ background: "none", border: "none", color: "var(--danger)", cursor: "pointer" }}>✕</button>
-            </span>
+      <div style={{ display: "grid", gap: 16 }}>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+          {["Driver 1", "Driver 2", "Car", "Sponsor"].map((lbl, i) => (
+            <span key={lbl} className="chip" style={{ borderColor: i + 1 === step ? "var(--accent)" : "var(--border)", color: i + 1 < step ? "var(--accent-2)" : i + 1 === step ? "var(--accent)" : "var(--muted)" }}>{i + 1 < step ? "✓ " : ""}{lbl}</span>
           ))}
+          <button className="chip" onClick={toggleMute} aria-label={muted ? "Unmute" : "Mute"} style={{ marginLeft: "auto", cursor: "pointer", color: "var(--text)" }}>{muted ? "🔇" : "🔊"}</button>
         </div>
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search drivers…"
-          style={{ padding: "0.6rem 0.8rem", borderRadius: 10, border: "1px solid var(--border)", background: "var(--panel-2)", color: "var(--text)" }} />
-        <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fill,minmax(150px,1fr))", maxHeight: 320, overflowY: "auto" }} className="scroll-x">
-          {filtered.map((d) => {
-            const on = picked.find((x) => x.id === d.id);
-            return (
-              <button key={d.id} onClick={() => toggle(d)} className="card"
-                style={{ padding: "0.6rem", textAlign: "left", cursor: "pointer", color: "var(--text)", borderColor: on ? "var(--accent)" : "var(--border)", display: "flex", gap: 8, alignItems: "center" }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={d.headshot || ""} alt="" width={34} height={34} loading="lazy" style={{ borderRadius: 8, background: "var(--panel-2)", objectFit: "cover" }} />
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, fontSize: ".8rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{d.flag} {d.name}</div>
-                  <div style={{ color: "var(--muted)", fontSize: ".7rem" }}>OVR {careerRating(d)}</div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-          <label style={{ fontWeight: 700 }}>Team</label>
-          <input value={teamName} onChange={(e) => setTeamName(e.target.value.slice(0, 22))}
-            style={{ padding: "0.5rem 0.7rem", borderRadius: 10, border: "1px solid var(--border)", background: "var(--panel-2)", color: "var(--text)" }} />
-        </div>
-        <button className="btn btn-primary" disabled={picked.length !== 2} onClick={start} style={{ justifySelf: "start" }}>
-          🏁 Begin the season
-        </button>
+        {(d1 || car) && (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", fontSize: ".82rem" }}>
+            {d1 && <span className="chip">👤 {d1.year} {d1.flag} {d1.name}</span>}
+            {d2 && <span className="chip">👤 {d2.year} {d2.flag} {d2.name}</span>}
+            {car && <span className="chip" style={{ borderColor: car.colour }}>🏎️ {car.year} {car.name}</span>}
+          </div>
+        )}
+        {phase === "sponsor" && (
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <label style={{ fontWeight: 700 }}>Team</label>
+            <input value={teamName} onChange={(e) => setTeamName(e.target.value.slice(0, 22))} style={{ padding: "0.5rem 0.7rem", borderRadius: 10, border: "1px solid var(--border)", background: "var(--panel-2)", color: "var(--text)" }} />
+          </div>
+        )}
+        {phase === "d1" && <DriverSpin pool={data.driverSeasons} exclude={[]} onPick={pickD1} which="first" key="d1" />}
+        {phase === "d2" && <DriverSpin pool={data.driverSeasons} exclude={d1 ? [d1.driverId] : []} onPick={pickD2} which="second" key="d2" />}
+        {phase === "car" && <CarSpin pool={data.carSeasons} onPick={pickCarOpt} />}
+        {phase === "sponsor" && <SponsorSpin sponsors={SPONSORS} onPick={pickSponsor} unit="$m to start" />}
       </div>
     );
   }
@@ -277,17 +258,19 @@ export default function CareerMode() {
       <span className="chip">Round {round + 1}/{rounds.length}</span>
       <span className="chip" style={{ color: "var(--gold)", borderColor: "var(--gold)" }}>💵 ${money}m</span>
       <span className="chip">🏆 P{myPos} · {myBest?.pts ?? 0} pts</span>
-      <span className="chip" style={{ marginLeft: "auto" }}>{r?.countryCode ? `${r.name}` : ""}</span>
+      <span className="chip">🏎️ car {playerCar()}</span>
+      <button className="chip" onClick={toggleMute} style={{ marginLeft: "auto", cursor: "pointer", color: "var(--text)" }}>{muted ? "🔇" : "🔊"}</button>
     </div>
   );
 
   // ---- EVENT ----
   if (phase === "event") {
+    const isLoss = event?.money && event.money[1] < 0 || (event?.carBoost && Object.values(event.carBoost).some((v) => (v ?? 0) < 0));
     return (
       <div style={{ display: "grid", gap: 14 }}>
         {HUD}
         {event ? (
-          <div className="card" style={{ padding: "1.3rem", textAlign: "center", display: "grid", gap: 8 }}>
+          <div className="card" style={{ padding: "1.3rem", textAlign: "center", display: "grid", gap: 8, borderColor: isLoss ? "var(--danger)" : "var(--border)" }}>
             <div style={{ fontSize: "2.2rem" }}>{event.emoji}</div>
             <h3 style={{ margin: 0 }}>{event.title}</h3>
             <p style={{ color: "var(--muted)", margin: 0 }}>{event.desc}</p>
@@ -296,21 +279,15 @@ export default function CareerMode() {
                 <button className="btn btn-primary" onClick={() => resolveChoice(true)}>{event.choice.yes}</button>
                 <button className="btn" onClick={() => resolveChoice(false)}>{event.choice.no}</button>
               </div>
-            ) : (
-              <div style={{ color: "var(--accent)", fontWeight: 800 }}>{eventMsg}</div>
-            )}
+            ) : <div style={{ color: isLoss ? "var(--danger)" : "var(--accent-2)", fontWeight: 800 }}>{eventMsg}</div>}
           </div>
-        ) : (
-          <div className="card" style={{ padding: "1.3rem", textAlign: "center", color: "var(--muted)" }}>A quiet week in the paddock. On to the garage.</div>
-        )}
-        {(!event || event.kind === "auto" || eventMsg) && (
-          <button className="btn btn-primary" onClick={() => setPhase("garage")} style={{ justifySelf: "center" }}>To the garage →</button>
-        )}
+        ) : <div className="card" style={{ padding: "1.3rem", textAlign: "center", color: "var(--muted)" }}>A rare quiet week in the paddock.</div>}
+        {(!event || event.kind === "auto" || eventMsg) && <button className="btn btn-primary" onClick={() => setPhase("garage")} style={{ justifySelf: "center" }}>To the garage →</button>}
       </div>
     );
   }
 
-  // ---- GARAGE (upgrades) ----
+  // ---- GARAGE ----
   if (phase === "garage") {
     return (
       <div style={{ display: "grid", gap: 14 }}>
@@ -345,7 +322,7 @@ export default function CareerMode() {
     );
   }
 
-  // ---- RACING (animation) ----
+  // ---- RACING ----
   if (phase === "racing") {
     const racers = entries.slice(0, 12).map((e, i) => ({ colour: e.isPlayer ? "#ff5436" : e.colour, offset: i / 12 }));
     return (
@@ -384,9 +361,7 @@ export default function CareerMode() {
             </tbody>
           </table>
         </div>
-        <button className="btn btn-primary" onClick={advance} style={{ justifySelf: "center" }}>
-          {round + 1 >= rounds.length ? "Finish season" : "Next round →"}
-        </button>
+        <button className="btn btn-primary" onClick={advance} style={{ justifySelf: "center" }}>{round + 1 >= rounds.length ? "Finish season" : "Next round →"}</button>
       </div>
     );
   }
@@ -399,12 +374,8 @@ export default function CareerMode() {
     <div style={{ display: "grid", gap: 14 }}>
       {won && <Confetti />}
       <div className="card pop" style={{ padding: "1.4rem", textAlign: "center", borderColor: won ? "var(--gold)" : "var(--border)", display: "grid", gap: 8 }}>
-        <div style={{ fontFamily: "var(--font-cond)", fontSize: "1.8rem", color: won ? "var(--gold)" : "var(--text)", textTransform: "uppercase" }}>
-          {won ? "🏆 Champions!" : `Season over — P${myPos}`}
-        </div>
-        <p style={{ color: "var(--muted)", margin: 0 }}>
-          You finished P{myPos} with {myScore} points and ${money}m in the bank. Champion: {champ?.e.flag} {champ?.e.name}.
-        </p>
+        <div style={{ fontFamily: "var(--font-cond)", fontSize: "1.8rem", color: won ? "var(--gold)" : "var(--text)", textTransform: "uppercase" }}>{won ? "🏆 Champions!" : `Season over — P${myPos}`}</div>
+        <p style={{ color: "var(--muted)", margin: 0 }}>You finished P{myPos} with {myScore} points and ${money}m in the bank. Champion: {champ?.e.flag} {champ?.e.name}.</p>
         <ShareButtons
           card={{ eyebrow: "Career Mode", big: `P${myPos}`, headline: won ? "CHAMPIONS" : "SEASON OVER", lines: [teamName, `${myScore} championship points`, `$${money}m in the bank`], path: "/games/career" }}
           caption={`I finished P${myPos} (${myScore} pts) running ${teamName} in F1Slam Career Mode 🏎️ Think you can do better?`}
