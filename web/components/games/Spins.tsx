@@ -4,6 +4,7 @@ import type { SeasonPick, CarPick } from "@/lib/games-data";
 import { tick, settle, tap } from "@/lib/sound";
 
 export interface Sponsor { name: string; emoji: string; blurb: string; value: number }
+export interface EngTeam { name: string; emoji: string; blurb: string; mod: { chassis: number; engine: number; aero: number; reliability: number } }
 
 export function sample<T>(arr: T[], n: number, exclude: (x: T) => boolean = () => false): T[] {
   const pool = arr.filter((x) => !exclude(x));
@@ -77,6 +78,36 @@ export function CarSpin({ pool, onPick }: { pool: CarPick[]; onPick: (c: CarPick
             <div style={{ fontWeight: 800 }}>{c.flag} {c.name}</div>
             <div style={{ color: "var(--muted)", fontSize: ".76rem" }}>That season: P{c.position} · {c.wins} wins · {c.points} pts</div>
             <div style={{ fontFamily: "var(--font-cond)", color: "var(--gold)", marginTop: 6, fontSize: "1.1rem" }}>🏎️ car strength {c.strength}</div>
+          </button>
+        ))}
+      </div>
+      {phase === "spinning" && <Spinning />}
+    </SpinShell>
+  );
+}
+
+const MOD_LABEL: { key: keyof EngTeam["mod"]; emoji: string }[] = [
+  { key: "chassis", emoji: "🏎️" }, { key: "engine", emoji: "⚙️" }, { key: "aero", emoji: "🪽" }, { key: "reliability", emoji: "🔧" },
+];
+
+export function EngSpin({ pool, onPick }: { pool: EngTeam[]; onPick: (t: EngTeam) => void }) {
+  const { phase, opts, flash, spin } = useSpin<EngTeam>(() => sample(pool, 5));
+  const shown = phase === "spinning" ? sample(pool, 5) : opts;
+  return (
+    <SpinShell title="Spin for an engineering team" subtitle="Each outfit shapes the car — strong in some areas, weak in others. They set your strengths; the car sets your level." phase={phase} onSpin={spin}>
+      <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }} key={flash}>
+        {shown.map((t) => (
+          <button key={t.name} disabled={phase === "spinning"} onClick={() => { if (phase === "done") { tap(); onPick(t); } }} className="card"
+            style={{ padding: "1rem", textAlign: "left", cursor: phase === "done" ? "pointer" : "default", color: "var(--text)", opacity: phase === "spinning" ? 0.55 : 1 }}>
+            <div style={{ fontSize: "1.5rem" }}>{t.emoji}</div>
+            <div style={{ fontWeight: 800 }}>{t.name}</div>
+            <div style={{ color: "var(--muted)", fontSize: ".76rem", minHeight: 32 }}>{t.blurb}</div>
+            <div style={{ display: "flex", gap: 8, marginTop: 6, fontSize: ".74rem", flexWrap: "wrap" }}>
+              {MOD_LABEL.map(({ key, emoji }) => {
+                const v = t.mod[key];
+                return <span key={key} style={{ color: v > 0 ? "var(--accent-2)" : v < 0 ? "var(--danger)" : "var(--muted)" }}>{emoji} {v > 0 ? "+" : ""}{v}</span>;
+              })}
+            </div>
           </button>
         ))}
       </div>

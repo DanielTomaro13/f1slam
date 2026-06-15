@@ -8,7 +8,7 @@ import ScoreSubmit from "@/components/games/ScoreSubmit";
 import ShareButtons from "@/components/ShareButtons";
 import Confetti from "@/components/Confetti";
 import TrackMap from "@/components/TrackMap";
-import { DriverSpin, CarSpin, SponsorSpin, sample, type Sponsor } from "@/components/games/Spins";
+import { DriverSpin, CarSpin, EngSpin, SponsorSpin, sample, type Sponsor, type EngTeam } from "@/components/games/Spins";
 import { fanfare, settle, isMuted, setMuted, tap } from "@/lib/sound";
 
 const GAME = "career";
@@ -38,6 +38,23 @@ const SPONSORS: Sponsor[] = [
   { name: "National Lottery", emoji: "🎟️", blurb: "Someone's got to win.", value: 38 },
   { name: "Family Money", emoji: "👑", blurb: "A modest windfall from the relatives.", value: 30 },
   { name: "Hardware Store", emoji: "🔩", blurb: "Local, loyal — and a little tight.", value: 20 },
+];
+
+// Engineering teams shape the car (where it's strong/weak); modifiers sum near 0
+// so most are a trade-off, with a couple of safe/risky outliers.
+const ENG_TEAMS: EngTeam[] = [
+  { name: "Apex Dynamics", emoji: "🪽", blurb: "Aero obsessives — huge downforce.", mod: { chassis: -2, engine: -8, aero: 14, reliability: -4 } },
+  { name: "Titan Powertrains", emoji: "⚙️", blurb: "The strongest engine on the grid.", mod: { chassis: -6, engine: 14, aero: -6, reliability: -2 } },
+  { name: "Monocoque Labs", emoji: "🏎️", blurb: "A beautifully balanced chassis.", mod: { chassis: 14, engine: -6, aero: -4, reliability: -4 } },
+  { name: "Ironside Racing", emoji: "🔧", blurb: "Bulletproof — they always finish.", mod: { chassis: -4, engine: -6, aero: -6, reliability: 16 } },
+  { name: "Meridian Works", emoji: "⚖️", blurb: "No weaknesses, no superpowers.", mod: { chassis: 2, engine: 2, aero: 2, reliability: 2 } },
+  { name: "Skunkworks 56", emoji: "🚀", blurb: "Blisteringly fast — and fragile.", mod: { chassis: 8, engine: 8, aero: 8, reliability: -24 } },
+  { name: "Privateer Garage", emoji: "🧰", blurb: "Plucky underdogs on a shoestring.", mod: { chassis: -5, engine: -5, aero: -5, reliability: -1 } },
+  { name: "Vortex Engines", emoji: "💨", blurb: "Monster top speed.", mod: { chassis: -6, engine: 16, aero: -6, reliability: -4 } },
+  { name: "Carbon Foundry", emoji: "🛠️", blurb: "Stiff, light, quick.", mod: { chassis: 16, engine: -4, aero: -6, reliability: -6 } },
+  { name: "Quantum Aero", emoji: "🌀", blurb: "Wind-tunnel wizards.", mod: { chassis: -4, engine: -6, aero: 16, reliability: -6 } },
+  { name: "Old Guard Motors", emoji: "🛡️", blurb: "Dependable veteran outfit.", mod: { chassis: 2, engine: 0, aero: -2, reliability: 12 } },
+  { name: "Garage Band Racing", emoji: "🎸", blurb: "Talented chaos.", mod: { chassis: 6, engine: 6, aero: 8, reliability: -20 } },
 ];
 
 type GEvent = {
@@ -88,10 +105,11 @@ export default function CareerMode() {
   const [data, setData] = useState<Awaited<ReturnType<typeof loadGamesData>> | null>(null);
   const [rounds, setRounds] = useState<Round[]>([]);
   const [tracks, setTracks] = useState<Record<string, Track>>({});
-  const [phase, setPhase] = useState<"d1" | "d2" | "car" | "sponsor" | "event" | "garage" | "racing" | "result" | "end">("d1");
+  const [phase, setPhase] = useState<"d1" | "d2" | "eng" | "car" | "sponsor" | "event" | "garage" | "racing" | "result" | "end">("d1");
 
   const [d1, setD1] = useState<SeasonPick | null>(null);
   const [d2, setD2] = useState<SeasonPick | null>(null);
+  const [eng, setEng] = useState<EngTeam | null>(null);
   const [car, setCar] = useState<CarPick | null>(null);
   const [teamName, setTeamName] = useState("My Team");
   const [build, setBuild] = useState<Record<Cat, number>>({ chassis: 55, engine: 55, aero: 55, reliability: 55 });
@@ -122,8 +140,16 @@ export default function CareerMode() {
 
   // ---- setup spins ----
   function pickD1(p: SeasonPick) { setD1(p); setPhase("d2"); }
-  function pickD2(p: SeasonPick) { setD2(p); setPhase("car"); }
-  function pickCarOpt(c: CarPick) { setCar(c); const base = Math.round(c.strength * 0.6 + 30); setBuild({ chassis: base, engine: base, aero: base, reliability: base }); setPhase("sponsor"); }
+  function pickD2(p: SeasonPick) { setD2(p); setPhase("eng"); }
+  function pickEng(t: EngTeam) { setEng(t); setPhase("car"); }
+  function pickCarOpt(c: CarPick) {
+    setCar(c);
+    const level = Math.round(c.strength * 0.6 + 30); // overall car level from the constructor season
+    const m = eng?.mod ?? { chassis: 0, engine: 0, aero: 0, reliability: 0 };
+    const clamp = (v: number) => Math.max(20, Math.min(100, v));
+    setBuild({ chassis: clamp(level + m.chassis), engine: clamp(level + m.engine), aero: clamp(level + m.aero), reliability: clamp(level + m.reliability) });
+    setPhase("sponsor");
+  }
   function pickSponsor(s: Sponsor) {
     if (!d1 || !d2 || !data) return;
     setMoney(s.value);
@@ -209,7 +235,7 @@ export default function CareerMode() {
   }
 
   function reset() {
-    setPhase("d1"); setD1(null); setD2(null); setCar(null); setMoney(0); setRound(0); setTally({}); setEntries([]);
+    setPhase("d1"); setD1(null); setD2(null); setEng(null); setCar(null); setMoney(0); setRound(0); setTally({}); setEntries([]);
     setBuild({ chassis: 55, engine: 55, aero: 55, reliability: 55 });
   }
 
@@ -222,20 +248,22 @@ export default function CareerMode() {
   const myPos = myBest ? standings.indexOf(myBest) + 1 : 0;
 
   // ---- SETUP (spins) ----
-  if (phase === "d1" || phase === "d2" || phase === "car" || phase === "sponsor") {
-    const step = phase === "d1" ? 1 : phase === "d2" ? 2 : phase === "car" ? 3 : 4;
+  if (phase === "d1" || phase === "d2" || phase === "eng" || phase === "car" || phase === "sponsor") {
+    const order = ["d1", "d2", "eng", "car", "sponsor"];
+    const step = order.indexOf(phase) + 1;
     return (
       <div style={{ display: "grid", gap: 16 }}>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-          {["Driver 1", "Driver 2", "Car", "Sponsor"].map((lbl, i) => (
+          {["Driver 1", "Driver 2", "Engineers", "Car", "Sponsor"].map((lbl, i) => (
             <span key={lbl} className="chip" style={{ borderColor: i + 1 === step ? "var(--accent)" : "var(--border)", color: i + 1 < step ? "var(--accent-2)" : i + 1 === step ? "var(--accent)" : "var(--muted)" }}>{i + 1 < step ? "✓ " : ""}{lbl}</span>
           ))}
           <button className="chip" onClick={toggleMute} aria-label={muted ? "Unmute" : "Mute"} style={{ marginLeft: "auto", cursor: "pointer", color: "var(--text)" }}>{muted ? "🔇" : "🔊"}</button>
         </div>
-        {(d1 || car) && (
+        {(d1 || eng || car) && (
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", fontSize: ".82rem" }}>
             {d1 && <span className="chip">👤 {d1.year} {d1.flag} {d1.name}</span>}
             {d2 && <span className="chip">👤 {d2.year} {d2.flag} {d2.name}</span>}
+            {eng && <span className="chip">{eng.emoji} {eng.name}</span>}
             {car && <span className="chip" style={{ borderColor: car.colour }}>🏎️ {car.year} {car.name}</span>}
           </div>
         )}
@@ -247,6 +275,7 @@ export default function CareerMode() {
         )}
         {phase === "d1" && <DriverSpin pool={data.driverSeasons} exclude={[]} onPick={pickD1} which="first" key="d1" />}
         {phase === "d2" && <DriverSpin pool={data.driverSeasons} exclude={d1 ? [d1.driverId] : []} onPick={pickD2} which="second" key="d2" />}
+        {phase === "eng" && <EngSpin pool={ENG_TEAMS} onPick={pickEng} />}
         {phase === "car" && <CarSpin pool={data.carSeasons} onPick={pickCarOpt} />}
         {phase === "sponsor" && <SponsorSpin sponsors={SPONSORS} onPick={pickSponsor} unit="$m to start" />}
       </div>

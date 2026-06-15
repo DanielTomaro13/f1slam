@@ -19,7 +19,7 @@ export default function Page() {
       title="Career Mode"
       intro="The enhanced management game. Spin for your two drivers, your car and your title sponsor — just like the Season Simulator — then run a championship campaign race by race: develop the car on a budget, survive the paddock, and watch each Grand Prix unfold on the real circuit map."
       howTo={[
-        "Spin for your first and second drivers (five options each), then spin for a car and a title sponsor — your sponsor sets your starting budget.",
+        "Spin for your first and second drivers (five options each), an engineering team (which shapes where your car is strong), a car (a real constructor season that sets its overall level) and a title sponsor (your starting budget).",
         "Between every round a random event hits. The paddock is brutal: more often than not it's a fine, a crash that damages the car, a blown engine or a sponsor walking — so a good week is a relief, not a given.",
         "Spend what money you have left developing the car; strong results pay prize money, poor ones leave you broke.",
         "Race the calendar and finish as high in the championship as you can — if your battered car still has the pace.",
