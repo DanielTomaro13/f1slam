@@ -90,8 +90,21 @@ const EVENTS: GEvent[] = [
   { emoji: "🧲", title: "Star aerodynamicist", desc: "Poach a big name for a serious aero gain — at a price.", weight: 3, kind: "choice", choice: { yes: "Hire (−18, +9 aero)", no: "Pass" } },
 ];
 
-function buildField(ai: SeasonPick[], used: Set<string>, player: Entry[]): Entry[] {
-  const pool = ai.filter((p) => !used.has(p.driverId)).slice(0, 18);
+function buildField(ai: SeasonPick[], used: Set<string>, player: Entry[], rnd: () => number): Entry[] {
+  // One entry per driver (their best-rated season) so the grid is 18 *distinct*
+  // rivals — driverSeasons holds every season, and a legend like Hamilton has
+  // ~19 of them, which would otherwise fill the whole field with one name.
+  const best = new Map<string, SeasonPick>();
+  for (const p of ai) {
+    if (used.has(p.driverId)) continue;
+    const cur = best.get(p.driverId);
+    if (!cur || p.rating > cur.rating) best.set(p.driverId, p);
+  }
+  // Sample 18 from the strongest ~50 distinct drivers so the grid is competitive
+  // but varies each career, instead of always the same all-time top 18.
+  const top = [...best.values()].sort((a, b) => b.rating - a.rating).slice(0, 50);
+  const pool: SeasonPick[] = [];
+  while (pool.length < 18 && top.length) pool.push(top.splice(Math.floor(rnd() * top.length), 1)[0]);
   return [
     ...player,
     ...pool.map((p) => ({
@@ -163,7 +176,7 @@ export default function CareerMode() {
       id: p.key, name: p.name, code: p.code, team: teamName, colour: "#ff5436",
       driver: p.rating, car: 60, reliability: 0.85, isPlayer: true, flag: p.flag, headshot: p.headshot,
     }));
-    setEntries(buildField(data.driverSeasons, new Set([d1.driverId, d2.driverId]), player));
+    setEntries(buildField(data.driverSeasons, new Set([d1.driverId, d2.driverId]), player, rngRef.current));
     setTally({});
     setRound(0);
     nextEvent();

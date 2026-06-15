@@ -111,7 +111,15 @@ export default function SeasonSimulator() {
       driver: p.rating, car: carRating, reliability: rel, isPlayer: true, flag: p.flag, headshot: p.headshot,
     }));
     const used = new Set([d1.driverId, d2.driverId]);
-    const ai = sample(data.driverSeasons, 18, (p) => used.has(p.driverId)).map((p) => ({
+    // one entry per driver (best season) so the grid is 18 distinct rivals,
+    // not the same legend's name repeated across the field
+    const best = new Map<string, typeof data.driverSeasons[number]>();
+    for (const p of data.driverSeasons) {
+      if (used.has(p.driverId)) continue;
+      const cur = best.get(p.driverId);
+      if (!cur || p.rating > cur.rating) best.set(p.driverId, p);
+    }
+    const ai = sample([...best.values()], 18).map((p) => ({
       id: p.key, name: p.name, code: p.code, team: `${p.year} ${p.team}`, colour: p.teamColour,
       driver: p.rating, car: aiCar(p.rating, p.wins), reliability: 0.88, isPlayer: false, flag: p.flag, headshot: p.headshot,
     } as Entry));
