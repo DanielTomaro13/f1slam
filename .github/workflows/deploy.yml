@@ -25,7 +25,11 @@ jobs:
           cache: npm
       - run: npm ci
       # The F1 snapshot is committed under web/public/data, so the build is
-      # pure-static and needs no network access to the OpenF1 API here.
+      # pure-static and needs no network access here. Regenerate the large
+      # build-only race archive (web/races.json) from it — it's derived data,
+      # so it's git-ignored and rebuilt on every deploy.
+      - name: Build race archive (derived, build-only)
+        run: node pipeline/recompute-ratings.mjs
       - name: Build static export
         run: npm run build
         env:

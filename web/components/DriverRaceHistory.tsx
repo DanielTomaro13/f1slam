@@ -1,5 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import type { RaceRow } from "@/lib/f1";
 
 export default function DriverRaceHistory({ races }: { races: RaceRow[] }) {
@@ -48,13 +49,18 @@ export default function DriverRaceHistory({ races }: { races: RaceRow[] }) {
       <div className="card scroll-x">
         <table className="stat">
           <thead>
-            <tr><th>Rnd</th><th>Grand Prix</th><th>Grid</th><th>Finish</th><th>Pts</th></tr>
+            <tr><th>Rnd</th><th>Grand Prix</th><th>Grid</th><th>Finish</th><th>Pts</th><th title="F1 Fantasy points">Fan.</th></tr>
           </thead>
           <tbody>
             {rows.map((r) => (
               <tr key={`${r.season}-${r.round}`}>
                 <td style={{ fontFamily: "var(--font-mono)" }}>R{r.round}</td>
-                <td style={{ fontWeight: 600 }}>{r.race.replace(" Grand Prix", " GP")}</td>
+                <td style={{ fontWeight: 600 }}>
+                  <Link href={`/races/${r.season}/${r.round}`} style={{ color: "var(--text)" }}>
+                    {r.race.replace(" Grand Prix", " GP")}
+                    {r.fl ? <span title="Fastest lap" style={{ color: "var(--accent-2)", marginLeft: 5, fontSize: ".72rem" }}>FL</span> : null}
+                  </Link>
+                </td>
                 <td style={{ fontFamily: "var(--font-mono)", color: "var(--muted)" }}>{r.grid ? `P${r.grid}` : "—"}</td>
                 <td style={{
                   fontFamily: "var(--font-mono)",
@@ -64,6 +70,12 @@ export default function DriverRaceHistory({ races }: { races: RaceRow[] }) {
                   {r.dnf ? "DNF" : r.position != null ? `P${r.position}` : "—"}
                 </td>
                 <td style={{ fontFamily: "var(--font-mono)", color: "var(--gold)" }}>{r.points || ""}</td>
+                <td style={{
+                  fontFamily: "var(--font-mono)",
+                  color: r.fantasy == null ? "var(--muted)" : r.fantasy > 0 ? "var(--accent-2)" : r.fantasy < 0 ? "var(--danger)" : "var(--muted)",
+                }}>
+                  {r.fantasy == null ? "" : r.fantasy > 0 ? `+${r.fantasy}` : r.fantasy}
+                </td>
               </tr>
             ))}
           </tbody>

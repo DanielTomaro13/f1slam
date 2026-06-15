@@ -169,6 +169,7 @@ export default async function DriverPage({
         <StatCard label="Race starts" value={c.races} />
         <StatCard label="Seasons" value={c.seasons} />
         <StatCard label="Best championship" value={c.bestPos ? `P${c.bestPos}` : "—"} />
+        {c.fantasy != null && <StatCard label="Fantasy points" value={c.fantasy.toLocaleString()} />}
       </section>
 
       <section>
@@ -184,6 +185,7 @@ export default async function DriverPage({
                 <th>Poles</th>
                 <th>Pod.</th>
                 <th>Points</th>
+                <th title="F1 Fantasy points scored that season">Fantasy</th>
                 <th title="Average finishing position">Avg</th>
                 <th title="Race head-to-head vs team-mate">vs Mate</th>
                 <th title="Season rating used by the games">OVR</th>
@@ -211,6 +213,9 @@ export default async function DriverPage({
                   <td style={{ fontFamily: "var(--font-mono)" }}>{s.podiums}</td>
                   <td style={{ fontFamily: "var(--font-mono)", color: "var(--gold)" }}>
                     {s.points}
+                  </td>
+                  <td style={{ fontFamily: "var(--font-mono)", color: "var(--accent-2)" }}>
+                    {s.fantasy != null ? s.fantasy : "—"}
                   </td>
                   <td style={{ fontFamily: "var(--font-mono)", color: "var(--muted)" }}>
                     {s.avgFinish != null ? `P${s.avgFinish}` : "—"}

@@ -1,63 +1,65 @@
 /**
- * F1Slam — ratings model (shared by the pipeline and the recompute script).
+ * F1Slam — ranking model based on the official F1 Fantasy scoring system.
+ * (https://fantasy.formula1.com — Game Rules, 2024/25 values.)
  *
- * Driver-season rating and constructor-season strength, computed from as much
- * real data as we have: per-race finishing positions, grid (qualifying)
- * positions, DNFs, points, championship position AND head-to-head versus
- * team-mate (the best available proxy for isolating driver skill from the car).
+ * A driver scores fantasy points each race weekend from:
+ *   • Qualifying position    P1 10 … P10 1  (P11+ 0)
+ *   • Race finish position   P1 25, P2 18, P3 15, P4 12, P5 10, P6 8, P7 6,
+ *                            P8 4, P9 2, P10 1  (P11+ 0)
+ *   • Positions gained/lost  +1 / −1 per place (grid → finish)
+ *   • Fastest lap            +10
+ *   • DNF / not classified   −20      • Disqualified  −25
+ * (Overtakes and Driver of the Day aren't in the historical record, so are
+ *  omitted; they're noted in the UI.)
  *
- * Everything is normalised within its own season so eras with different points
- * systems and grid sizes stay comparable.
+ * Constructor fantasy = the sum of its drivers' fantasy points plus a per-race
+ * qualifying bonus (both cars in Q3 +10, one +5, both in Q2 +3, one +1, none −1;
+ * Q2/Q3 are approximated from grid ≤ 15 / ≤ 10 since the cut data isn't stored).
  */
 
-const clamp01 = (x) => Math.max(0, Math.min(1, x));
+const Q_PTS = [0, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];        // by grid 1..10
+const R_PTS = [0, 25, 18, 15, 12, 10, 8, 6, 4, 2, 1];    // by finish 1..10
 
-/**
- * Driver-season rating, 54–99.
- * @param s per-season stats:
- *   { ppr, seasonMaxPpr, winRate, podiumRate, poleRate, avgFinish, dnfRate,
- *     champPos, tmGridW, tmGridR, tmRaceW, tmRaceR, ptsShare, hasTeammate }
- */
-export function driverSeasonRating(s) {
-  const ppN = clamp01(s.ppr / (s.seasonMaxPpr || 1));         // points-per-race vs season best
-  const finishScore = s.avgFinish != null ? clamp01((20 - s.avgFinish) / 19) : 0.4; // P1→1, P20→0
-
-  // absolute output (driver + car)
-  let core =
-    0.40 * ppN +
-    0.18 * clamp01(s.podiumRate) +
-    0.12 * clamp01(s.winRate) +
-    0.08 * clamp01(s.poleRate) +
-    0.12 * finishScore;
-
-  // championship standing bonus
-  core += s.champPos === 1 ? 0.10 : s.champPos <= 3 ? 0.05 : s.champPos <= 6 ? 0.02 : 0;
-
-  // reliability drag (DNFs are partly car, but a messy season is a messy season)
-  core -= 0.06 * clamp01(s.dnfRate);
-
-  // team-mate head-to-head — rewards beating your reference point in equal machinery
-  if (s.hasTeammate) {
-    const q = s.tmGridR > 0 ? s.tmGridW / s.tmGridR : 0.5;
-    const r = s.tmRaceR > 0 ? s.tmRaceW / s.tmRaceR : 0.5;
-    const share = s.ptsShare != null ? s.ptsShare : 0.5;
-    const h2h = 0.4 * q + 0.4 * r + 0.2 * share; // 0.5 == evenly matched
-    core += (h2h - 0.5) * 0.18; // up to ±0.09
+/** Fantasy points for one driver in one race. row: {grid,position,dnf,status,fl} */
+export function fantasyForRace(row) {
+  let pts = 0;
+  const grid = row.grid || 0;
+  if (grid >= 1 && grid <= 10) pts += Q_PTS[grid];          // qualifying
+  const dsq = /disqualif/i.test(row.status || "");
+  if (dsq) pts -= 25;
+  else if (row.dnf || row.position == null) pts -= 20;       // DNF / not classified
+  else {
+    if (row.position >= 1 && row.position <= 10) pts += R_PTS[row.position]; // race finish
+    if (grid > 0) pts += grid - row.position;                // positions gained / lost
   }
-
-  return Math.round(54 + clamp01(core) * 45);
+  if (row.fl) pts += 10;                                      // fastest lap
+  return pts;
 }
 
+/** Constructor qualifying bonus for a race, from both cars' grid slots. */
+export function constructorQualiBonus(grids) {
+  const q3 = grids.filter((g) => g >= 1 && g <= 10).length;  // ≈ reached Q3
+  const q2 = grids.filter((g) => g >= 1 && g <= 15).length;  // ≈ reached Q2
+  if (q3 >= 2) return 10;
+  if (q3 === 1) return 5;
+  if (q2 >= 2) return 3;
+  if (q2 === 1) return 1;
+  return -1;
+}
+
+const clamp = (lo, hi, x) => Math.max(lo, Math.min(hi, x));
+
 /**
- * Constructor-season strength, 45–99.
- * @param s { ptsN, paceScore (from avg best-car finish), winRate, poleRate, champPos }
+ * 0–99 game rating from fantasy points per race, normalised to the season's
+ * best so eras stay comparable. (The sim uses this as the driver's value.)
  */
-export function constructorStrength(s) {
-  let core =
-    0.45 * clamp01(s.ptsN) +
-    0.30 * clamp01(s.paceScore) +
-    0.15 * clamp01(s.winRate) +
-    0.10 * clamp01(s.poleRate);
-  core += s.champPos === 1 ? 0.08 : s.champPos <= 3 ? 0.03 : 0;
-  return Math.round(45 + clamp01(core) * 54);
+export function ratingFromFantasy(fantasyPerRace, seasonBestFpr) {
+  const n = seasonBestFpr > 0 ? fantasyPerRace / seasonBestFpr : 0;
+  return Math.round(clamp(45, 99, 52 + n * 47));
+}
+
+/** 0–99 car strength from a constructor's fantasy-per-race, normalised. */
+export function strengthFromFantasy(fantasyPerRace, seasonBestFpr) {
+  const n = seasonBestFpr > 0 ? fantasyPerRace / seasonBestFpr : 0;
+  return Math.round(clamp(40, 99, 46 + n * 53));
 }

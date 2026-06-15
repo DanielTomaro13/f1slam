@@ -17,6 +17,7 @@ export interface DriverSeason {
   races: number;
   position: number;
   rating: number;          // 0..100 strength that season (used by the games)
+  fantasy?: number;        // F1-Fantasy points scored that season
   avgFinish?: number | null; // mean classified finish
   dnfRate?: number;        // % of starts retired
   tmQ?: string;            // qualifying H2H vs team-mate "W-L"
@@ -34,6 +35,7 @@ export interface DriverCareer {
   bestPos: number | null;
   firstYear: number;
   lastYear: number;
+  fantasy?: number;        // career F1-Fantasy points
 }
 
 /** A single race result row (lives in history.json, read only at build time). */
@@ -50,6 +52,42 @@ export interface RaceRow {
   points: number;
   status: string;
   dnf: boolean;
+  fl?: boolean;            // set fastest lap
+  fantasy?: number;        // F1-Fantasy points for this race
+}
+
+/** One classified line in a race result (lives in races.json, build-time only). */
+export interface RaceResultRow {
+  driverId: string;
+  name: string;
+  code: string;
+  flag: string;
+  headshot: string | null;
+  team: string;
+  teamColour: string;
+  grid: number | null;
+  position: number | null;
+  points: number;
+  status: string;
+  dnf: boolean;
+  fl: boolean;
+  fantasy: number;
+  gainedLost: number | null;
+}
+
+/** A full Grand Prix classification (races.json, keyed `${season}-${round}`). */
+export interface RaceArchiveEntry {
+  season: number;
+  round: number;
+  name: string;
+  circuit: string;
+  circuitId: string | null;
+  circuitKey: number | null;
+  country: string;
+  countryCode: string | null;
+  date: string | null;
+  winner: string | null;
+  results: RaceResultRow[];
 }
 
 export interface Driver {
@@ -68,7 +106,7 @@ export interface Driver {
   bySeason: DriverSeason[]; // newest first
 }
 
-export interface ConstructorSeason { year: string; points: number; wins: number; position: number; strength: number }
+export interface ConstructorSeason { year: string; points: number; wins: number; position: number; strength: number; fantasy?: number }
 export interface Constructor {
   id: string;
   name: string;
@@ -76,7 +114,7 @@ export interface Constructor {
   nationality: string;
   country: string | null;
   flag: string;
-  career: { seasons: number; wins: number; points: number; championships: number; bestPos: number; lastYear: number; bestStrength: number };
+  career: { seasons: number; wins: number; points: number; championships: number; bestPos: number; lastYear: number; bestStrength: number; fantasy?: number };
   bySeason: ConstructorSeason[];
 }
 

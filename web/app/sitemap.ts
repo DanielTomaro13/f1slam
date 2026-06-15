@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 import { SITE } from "@/lib/seo";
 import { GAMES } from "@/lib/gamelist";
-import { serverF1 } from "@/lib/serverdata";
+import { serverF1, serverRaces } from "@/lib/serverdata";
 
 export const dynamic = "force-static";
 
@@ -12,6 +12,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/grand-slams",
     "/standings",
     "/drivers",
+    "/races",
     "/calendar",
     "/tracks",
     "/stats",
@@ -49,5 +50,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.5,
   }));
 
-  return [...staticPaths, ...gamePaths, ...driverPaths, ...trackPaths];
+  const racePaths = serverRaces().map((r) => ({
+    url: `${SITE.url}/races/${r.season}/${r.round}`,
+    lastModified: now,
+    changeFrequency: "monthly" as const,
+    priority: 0.4,
+  }));
+
+  return [...staticPaths, ...gamePaths, ...driverPaths, ...trackPaths, ...racePaths];
 }

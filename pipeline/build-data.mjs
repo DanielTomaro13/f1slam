@@ -156,6 +156,7 @@ async function main() {
           country: race.Circuit?.Location?.country || "", date: race.date || null,
           grid: Number(res.grid) || null, position: p, points: Number(res.points) || 0,
           status: res.status, dnf: !isFinished(res.status),
+          fl: res.FastestLap?.rank === "1",
         });
         history.set(id, list);
       }

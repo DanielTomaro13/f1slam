@@ -52,6 +52,7 @@ export default function StatsView({ data }: { data: F1Data }) {
         drv("🥂 Most podiums", (d) => d.career.podiums),
         drv("⚡ Most poles", (d) => d.career.poles),
         drv("📊 Most points", (d) => d.career.points),
+        drv("🎮 Most fantasy points", (d) => d.career.fantasy ?? 0),
         { key: "ctor-titles", title: "🏆 Most constructor titles", rows: constructorTitles },
       ];
     }
@@ -68,9 +69,17 @@ export default function StatsView({ data }: { data: F1Data }) {
       .sort((a, z) => z.value - a.value)
       .slice(0, 12);
 
+    const mostFantasy: Leader[] = data.drivers
+      .map((d) => ({ d, s: d.bySeason.find((x) => Number(x.year) === scope) }))
+      .filter((x) => (x.s?.fantasy ?? 0) > 0)
+      .map(({ d, s }) => ({ href: driverHref(d.id), label: `${d.flag} ${d.name}`, value: s!.fantasy! }))
+      .sort((a, z) => z.value - a.value)
+      .slice(0, 12);
+
     return [
       { key: "season-wins", title: "🏁 Most wins", rows: mostWins },
       { key: "season-points", title: "📊 Most points", rows: mostPoints },
+      { key: "season-fantasy", title: "🎮 Most fantasy points", rows: mostFantasy },
     ];
   }, [data, scope]);
 

@@ -25,3 +25,6 @@ yarn-error.log*
 
 # cloudflare worker
 .wrangler/
+
+# build-only race archive (regenerated at deploy)
+web/races.json
