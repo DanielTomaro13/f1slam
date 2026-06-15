@@ -20,20 +20,21 @@ const CATS: { key: Cat; label: string; emoji: string; hint: string }[] = [
   { key: "reliability", label: "Reliability", emoji: "🔧", hint: "Fewer DNFs — but no pace" },
 ];
 
-// sponsor.value = development budget for the Season Simulator
+// sponsor.value = development budget. Tech-partner sponsors trade raw budget
+// for a free fixed car gain, so a cheaper one is often worth it.
 const SPONSORS: Sponsor[] = [
-  { name: "Crypto Exchange", emoji: "🪙", blurb: "Volatile money, enormous cheque.", value: 120 },
-  { name: "Oil Major", emoji: "🛢️", blurb: "Old money, deep pockets.", value: 115 },
-  { name: "Streaming Giant", emoji: "📺", blurb: "Wants the drama — and pays for it.", value: 100 },
-  { name: "Telecoms Titan", emoji: "📡", blurb: "Coverage everywhere, including your wallet.", value: 92 },
-  { name: "Global Energy", emoji: "🥤", blurb: "Gives you wings and a solid budget.", value: 86 },
-  { name: "Airline", emoji: "🛫", blurb: "First-class backing.", value: 80 },
-  { name: "Startup Unicorn", emoji: "🦄", blurb: "Burning VC cash — your gain.", value: 72 },
-  { name: "Fashion House", emoji: "👗", blurb: "Style and a respectable sum.", value: 64 },
-  { name: "Luxury Watches", emoji: "⌚", blurb: "Precision money.", value: 56 },
-  { name: "National Lottery", emoji: "🎟️", blurb: "Someone's got to win.", value: 46 },
-  { name: "Family Money", emoji: "👑", blurb: "A modest windfall from the relatives.", value: 36 },
-  { name: "Hardware Store", emoji: "🔩", blurb: "Local, loyal — and a little tight.", value: 22 },
+  { name: "Crypto Exchange", emoji: "🪙", blurb: "Enormous cheque.", value: 120, pro: "Huge R&D budget", con: "No technical tie-in" },
+  { name: "Oil Major", emoji: "🛢️", blurb: "Old money.", value: 112, pro: "Deep R&D budget", con: "No technical tie-in" },
+  { name: "Streaming Giant", emoji: "📺", blurb: "Pays for drama.", value: 98, pro: "Strong budget", con: "No technical tie-in" },
+  { name: "Works Engine Deal", emoji: "⚙️", blurb: "Factory power unit.", value: 80, pro: "+12 power unit, free", con: "Less raw budget", effects: { techPartner: { cat: "engine", amount: 12 } } },
+  { name: "Aero Specialist", emoji: "🪽", blurb: "Wind-tunnel partner.", value: 78, pro: "+12 aero, free", con: "Less raw budget", effects: { techPartner: { cat: "aero", amount: 12 } } },
+  { name: "Chassis Partner", emoji: "🏎️", blurb: "Composites expert.", value: 78, pro: "+12 chassis, free", con: "Less raw budget", effects: { techPartner: { cat: "chassis", amount: 12 } } },
+  { name: "Reliability Backer", emoji: "🔧", blurb: "Quality obsessed.", value: 76, pro: "+14 reliability, free", con: "Less raw budget", effects: { techPartner: { cat: "reliability", amount: 14 } } },
+  { name: "Global Energy", emoji: "🥤", blurb: "Gives you wings.", value: 86, pro: "Solid budget", con: "No technical tie-in" },
+  { name: "Startup Unicorn", emoji: "🦄", blurb: "Burning VC cash.", value: 66, pro: "Decent budget", con: "No technical tie-in" },
+  { name: "Luxury Watches", emoji: "⌚", blurb: "Precision money.", value: 52, pro: "Some budget", con: "Modest sum" },
+  { name: "Family Money", emoji: "👑", blurb: "From the relatives.", value: 38, pro: "Free rein", con: "Small budget" },
+  { name: "Hardware Store", emoji: "🔩", blurb: "Local & loyal.", value: 24, pro: "Cheap & cheerful", con: "Tiny budget" },
 ];
 
 const STAGES = ["d1", "d2", "car", "sponsor", "build", "result"] as const;
@@ -51,6 +52,7 @@ export default function SeasonSimulator() {
   const [car, setCar] = useState<CarPick | null>(null);
   const [sponsor, setSponsor] = useState<Sponsor | null>(null);
   const [build, setBuild] = useState<Record<Cat, number>>({ chassis: 60, engine: 60, aero: 60, reliability: 60 });
+  const [base, setBase] = useState<Record<Cat, number>>({ chassis: 55, engine: 55, aero: 55, reliability: 55 });
   const [teamName, setTeamName] = useState("My Team");
   const [result, setResult] = useState<ReturnType<typeof simulateSeason> | null>(null);
   const [muted, setMutedState] = useState(false);
@@ -66,22 +68,36 @@ export default function SeasonSimulator() {
 
   function toggleMute() { const m = !muted; setMutedState(m); setMuted(m); if (!m) tap(); }
 
-  const base = car ? Math.round(car.strength * 0.6 + 30) : 55; // map strength→base car ~48..89
   function pickDriver(p: SeasonPick) {
     if (stage === "d1") { setD1(p); setStage("d2"); }
     else { setD2(p); setStage("car"); }
   }
-  function pickCar(c: CarPick) { setCar(c); const b = Math.round(c.strength * 0.6 + 30); setBuild({ chassis: b, engine: b, aero: b, reliability: b }); setStage("sponsor"); }
-  function pickSponsor(s: Sponsor) { setSponsor(s); setStage("build"); }
+  function pickCar(c: CarPick) {
+    setCar(c);
+    const b = Math.round(c.strength * 0.6 + 30); // map strength → base car ~48..89
+    setBase({ chassis: b, engine: b, aero: b, reliability: b });
+    setBuild({ chassis: b, engine: b, aero: b, reliability: b });
+    setStage("sponsor");
+  }
+  function pickSponsor(s: Sponsor) {
+    setSponsor(s);
+    // a tech-partner sponsor lifts one car area's base for free
+    const tp = s.effects?.techPartner;
+    if (tp) {
+      const lift = (b: Record<Cat, number>) => ({ ...b, [tp.cat]: Math.min(100, b[tp.cat] + tp.amount) });
+      setBase(lift); setBuild(lift);
+    }
+    setStage("build");
+  }
 
-  const spent = CATS.reduce((s, c) => s + (build[c.key] - base), 0);
+  const spent = CATS.reduce((s, c) => s + (build[c.key] - base[c.key]), 0);
   const remaining = (sponsor?.value ?? 0) - spent;
 
   function setCat(k: Cat, v: number) {
     if (!sponsor) return;
-    v = Math.max(base, Math.min(100, v));
-    const otherSpent = CATS.reduce((s, c) => s + (c.key === k ? 0 : build[c.key] - base), 0);
-    if (otherSpent + (v - base) > sponsor.value) v = base + (sponsor.value - otherSpent);
+    v = Math.max(base[k], Math.min(100, v));
+    const otherSpent = CATS.reduce((s, c) => s + (c.key === k ? 0 : build[c.key] - base[c.key]), 0);
+    if (otherSpent + (v - base[k]) > sponsor.value) v = base[k] + (sponsor.value - otherSpent);
     setBuild((b) => ({ ...b, [k]: v }));
   }
 
@@ -104,7 +120,7 @@ export default function SeasonSimulator() {
     setStage("result");
   }
 
-  function reset() { setStage("d1"); setD1(null); setD2(null); setCar(null); setSponsor(null); setResult(null); setBuild({ chassis: 60, engine: 60, aero: 60, reliability: 60 }); }
+  function reset() { setStage("d1"); setD1(null); setD2(null); setCar(null); setSponsor(null); setResult(null); setBuild({ chassis: 60, engine: 60, aero: 60, reliability: 60 }); setBase({ chassis: 55, engine: 55, aero: 55, reliability: 55 }); }
 
   if (!data) return <p style={{ color: "var(--muted)" }}>Loading the history books…</p>;
   const stepNum = STAGES.indexOf(stage) + 1;
@@ -234,16 +250,16 @@ export default function SeasonSimulator() {
             </span>
           </div>
           <p style={{ color: "var(--muted)", margin: 0, fontSize: ".88rem" }}>
-            The {car.year} {car.name} gives you a base car of {base}. Spend {sponsor.name}&apos;s {sponsor.value} development points to push it further.
+            The {car.year} {car.name} sets your base car{sponsor.effects?.techPartner ? `, and ${sponsor.name} adds +${sponsor.effects.techPartner.amount} ${sponsor.effects.techPartner.cat}` : ""}. Spend {sponsor.name}&apos;s {sponsor.value} development points to push it further.
           </p>
           <div style={{ display: "grid", gap: 12 }}>
             {CATS.map((c) => (
               <div key={c.key} className="card" style={{ padding: "0.9rem 1rem" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                   <strong>{c.emoji} {c.label}</strong>
-                  <span style={{ fontFamily: "var(--font-cond)" }}><span style={{ color: "var(--muted)" }}>base {base} →</span> <span style={{ color: "var(--gold)" }}>{build[c.key]}</span></span>
+                  <span style={{ fontFamily: "var(--font-cond)" }}><span style={{ color: "var(--muted)" }}>base {base[c.key]} →</span> <span style={{ color: "var(--gold)" }}>{build[c.key]}</span></span>
                 </div>
-                <input type="range" min={base} max={100} value={build[c.key]} onChange={(e) => setCat(c.key, Number(e.target.value))} style={{ width: "100%", accentColor: "var(--accent)" }} aria-label={c.label} />
+                <input type="range" min={base[c.key]} max={100} value={build[c.key]} onChange={(e) => setCat(c.key, Number(e.target.value))} style={{ width: "100%", accentColor: "var(--accent)" }} aria-label={c.label} />
                 <div style={{ color: "var(--muted)", fontSize: ".74rem" }}>{c.hint}</div>
               </div>
             ))}

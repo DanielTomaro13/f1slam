@@ -5,6 +5,7 @@
   "description": "F1Slam data pipeline — builds the static F1 snapshot from the OpenF1 API.",
   "type": "module",
   "scripts": {
-    "build": "node build-data.mjs"
+    "build": "node build-data.mjs && node recompute-ratings.mjs",
+    "ratings": "node recompute-ratings.mjs"
   }
 }

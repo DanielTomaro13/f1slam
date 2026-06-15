@@ -16,7 +16,11 @@ export interface DriverSeason {
   podiums: number;
   races: number;
   position: number;
-  rating: number; // 0..100 strength that season (used by the games)
+  rating: number;          // 0..100 strength that season (used by the games)
+  avgFinish?: number | null; // mean classified finish
+  dnfRate?: number;        // % of starts retired
+  tmQ?: string;            // qualifying H2H vs team-mate "W-L"
+  tmR?: string;            // race H2H vs team-mate "W-L"
 }
 
 export interface DriverCareer {

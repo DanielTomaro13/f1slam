@@ -42,6 +42,10 @@ export interface SeasonPick {
   wins: number;
   points: number;
   poles: number;
+  podiums: number;
+  position: number;
+  avgFinish: number | null;
+  tmR: string | null; // race head-to-head vs team-mate "W-L"
 }
 
 export interface CarPick {
@@ -83,6 +87,7 @@ export async function loadGamesData(): Promise<GamesData> {
       driverSeasons.push({
         key: `${d.id}-${s.year}`, driverId: d.id, name: d.name, code: d.code, flag: d.flag, headshot: d.headshot,
         year: s.year, team: s.team, teamColour: s.teamColour, rating: s.rating, wins: s.wins, points: s.points, poles: s.poles,
+        podiums: s.podiums, position: s.position, avgFinish: s.avgFinish ?? null, tmR: s.tmR ?? null,
       });
     }
   }

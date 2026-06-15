@@ -24,20 +24,21 @@ const CATS: { key: Cat; label: string; emoji: string }[] = [
   { key: "reliability", label: "Reliability", emoji: "🔧" },
 ];
 
-// sponsor.value = starting money ($m)
+// sponsor.value = starting money ($m). Big sponsors come with strings attached;
+// cheaper ones can be the smarter pick (loyal funding, cheap upgrades, win bonuses).
 const SPONSORS: Sponsor[] = [
-  { name: "Crypto Exchange", emoji: "🪙", blurb: "Volatile money, enormous cheque.", value: 140 },
-  { name: "Oil Major", emoji: "🛢️", blurb: "Old money, deep pockets.", value: 130 },
-  { name: "Streaming Giant", emoji: "📺", blurb: "Wants the drama — and pays for it.", value: 115 },
-  { name: "Telecoms Titan", emoji: "📡", blurb: "Coverage everywhere, including your wallet.", value: 100 },
-  { name: "Global Energy", emoji: "🥤", blurb: "Gives you wings and a healthy float.", value: 88 },
-  { name: "Airline", emoji: "🛫", blurb: "First-class backing.", value: 76 },
-  { name: "Startup Unicorn", emoji: "🦄", blurb: "Burning VC cash — your gain.", value: 64 },
-  { name: "Fashion House", emoji: "👗", blurb: "Style and a respectable sum.", value: 54 },
-  { name: "Luxury Watches", emoji: "⌚", blurb: "Precision money.", value: 46 },
-  { name: "National Lottery", emoji: "🎟️", blurb: "Someone's got to win.", value: 38 },
-  { name: "Family Money", emoji: "👑", blurb: "A modest windfall from the relatives.", value: 30 },
-  { name: "Hardware Store", emoji: "🔩", blurb: "Local, loyal — and a little tight.", value: 20 },
+  { name: "Crypto Exchange", emoji: "🪙", blurb: "Enormous, jittery cheque.", value: 140, pro: "Biggest starting budget", con: "Volatile — extra money shocks", effects: { volatile: true } },
+  { name: "Oil Major", emoji: "🛢️", blurb: "Deep pockets, high demands.", value: 125, pro: "Huge budget", con: "Pressure: −$8m on a pointless race", effects: { pressure: 8 } },
+  { name: "Streaming Giant", emoji: "📺", blurb: "Loves a winner.", value: 105, pro: "+$4m per race win", con: "Fickle — can pull out", effects: { winBonus: 4, volatile: true } },
+  { name: "Telecoms Titan", emoji: "📡", blurb: "Steady backing.", value: 92, pro: "Solid budget, no strings", con: "—" },
+  { name: "Works Engine Deal", emoji: "⚙️", blurb: "Factory power unit.", value: 70, pro: "+10 engine at the start", con: "Tighter budget", effects: { techPartner: { cat: "engine", amount: 10 } } },
+  { name: "Global Energy", emoji: "🥤", blurb: "Gives you wings.", value: 82, pro: "+$3m per race win", con: "Mid budget", effects: { winBonus: 3 } },
+  { name: "Aero Partner", emoji: "🪽", blurb: "Wind-tunnel tie-in.", value: 66, pro: "+10 aero at the start", con: "Smaller budget", effects: { techPartner: { cat: "aero", amount: 10 } } },
+  { name: "Airline", emoji: "🛫", blurb: "Efficient operators.", value: 60, pro: "Cheaper upgrades (−$2m)", con: "Smaller budget", effects: { devDiscount: 2 } },
+  { name: "Startup Unicorn", emoji: "🦄", blurb: "Burning VC cash.", value: 56, pro: "+$5m per race win", con: "Small base, may bail", effects: { winBonus: 5, volatile: true } },
+  { name: "National Lottery", emoji: "🎟️", blurb: "Backs winners.", value: 42, pro: "+$6m per race win", con: "Small starting budget", effects: { winBonus: 6 } },
+  { name: "Family Money", emoji: "👑", blurb: "Loyal relatives.", value: 32, pro: "Loyal — never walks out", con: "Small budget", effects: { loyal: true } },
+  { name: "Hardware Store", emoji: "🔩", blurb: "Local & devoted.", value: 22, pro: "Loyal + cheap upgrades (−$3m)", con: "Smallest budget", effects: { loyal: true, devDiscount: 3 } },
 ];
 
 // Engineering teams shape the car (where it's strong/weak); modifiers sum near 0
@@ -111,6 +112,7 @@ export default function CareerMode() {
   const [d2, setD2] = useState<SeasonPick | null>(null);
   const [eng, setEng] = useState<EngTeam | null>(null);
   const [car, setCar] = useState<CarPick | null>(null);
+  const [sponsor, setSponsor] = useState<Sponsor | null>(null);
   const [teamName, setTeamName] = useState("My Team");
   const [build, setBuild] = useState<Record<Cat, number>>({ chassis: 55, engine: 55, aero: 55, reliability: 55 });
   const [money, setMoney] = useState(0);
@@ -152,7 +154,10 @@ export default function CareerMode() {
   }
   function pickSponsor(s: Sponsor) {
     if (!d1 || !d2 || !data) return;
+    setSponsor(s);
     setMoney(s.value);
+    const tp = s.effects?.techPartner;
+    if (tp) setBuild((b) => ({ ...b, [tp.cat]: Math.min(100, b[tp.cat] + tp.amount) }));
     rngRef.current = mulberry32((Date.now() + d1.rating * 131 + d2.rating * 17 + s.value) >>> 0);
     const player: Entry[] = [d1, d2].map((p) => ({
       id: p.key, name: p.name, code: p.code, team: teamName, colour: "#ff5436",
@@ -168,10 +173,14 @@ export default function CareerMode() {
   function nextEvent() {
     let ev: GEvent | null = null;
     const r = rngRef.current;
+    const eff = sponsor?.effects;
     if (r() >= 0.12) {
-      const total = EVENTS.reduce((s, e) => s + e.weight, 0);
+      // loyal sponsors never walk; volatile sponsors amplify bad-money events
+      const pool = (eff?.loyal ? EVENTS.filter((e) => e.title !== "Sponsor walks") : EVENTS)
+        .map((e) => ({ e, w: eff?.volatile && e.money && e.money[1] < 0 ? e.weight * 1.6 : e.weight }));
+      const total = pool.reduce((s, x) => s + x.w, 0);
       let pick = r() * total;
-      for (const e of EVENTS) { pick -= e.weight; if (pick <= 0) { ev = e; break; } }
+      for (const x of pool) { pick -= x.w; if (pick <= 0) { ev = x.e; break; } }
     }
     setEvent(ev);
     setEventMsg("");
@@ -198,9 +207,10 @@ export default function CareerMode() {
     setEvent((e) => (e ? { ...e, kind: "auto" } : e));
   }
 
+  const upCost = Math.max(2, UPGRADE_COST - (sponsor?.effects?.devDiscount ?? 0));
   function buy(cat: Cat) {
-    if (money < UPGRADE_COST || build[cat] >= 100) return;
-    adjust(-UPGRADE_COST);
+    if (money < upCost || build[cat] >= 100) return;
+    adjust(-upCost);
     setBuild((b) => ({ ...b, [cat]: Math.min(100, b[cat] + UPGRADE_STEP) }));
   }
 
@@ -219,11 +229,15 @@ export default function CareerMode() {
       scored += res.points.get(e.id) || 0;
       if (!dnf && pos < best) { best = pos; bestName = e.name; }
     });
-    const reward = Math.round(scored * 0.9 + (best === 1 ? 6 : best <= 3 ? 3 : 0));
+    const eff = sponsor?.effects;
+    let reward = Math.round(scored * 0.9 + (best === 1 ? 6 : best <= 3 ? 3 : 0));
+    let bonusNote = "";
+    if (eff?.winBonus && best === 1) { reward += eff.winBonus; bonusNote = ` (incl. +$${eff.winBonus}m win bonus)`; }
+    if (eff?.pressure && scored === 0) { reward -= eff.pressure; bonusNote = ` (−$${eff.pressure}m sponsor pressure)`; }
     adjust(reward);
     setTally(nt);
     setEntries(field);
-    setLastResultMsg(best < 99 ? `Best finish: P${best} (${bestName}) · +${scored} pts · +$${reward}m` : "Both cars retired — no points, no prize.");
+    setLastResultMsg(best < 99 ? `Best finish: P${best} (${bestName}) · +${scored} pts · ${reward >= 0 ? "+" : "−"}$${Math.abs(reward)}m${bonusNote}` : `Both cars retired — no points${eff?.pressure ? `, −$${eff.pressure}m sponsor pressure` : ""}.`);
     if (best === 1) fanfare(); else settle();
     setPhase("result");
   }
@@ -235,7 +249,7 @@ export default function CareerMode() {
   }
 
   function reset() {
-    setPhase("d1"); setD1(null); setD2(null); setEng(null); setCar(null); setMoney(0); setRound(0); setTally({}); setEntries([]);
+    setPhase("d1"); setD1(null); setD2(null); setEng(null); setCar(null); setSponsor(null); setMoney(0); setRound(0); setTally({}); setEntries([]);
     setBuild({ chassis: 55, engine: 55, aero: 55, reliability: 55 });
   }
 
@@ -288,6 +302,7 @@ export default function CareerMode() {
       <span className="chip" style={{ color: "var(--gold)", borderColor: "var(--gold)" }}>💵 ${money}m</span>
       <span className="chip">🏆 P{myPos} · {myBest?.pts ?? 0} pts</span>
       <span className="chip">🏎️ car {playerCar()}</span>
+      {sponsor && <span className="chip" title={`${sponsor.pro} · ${sponsor.con}`}>{sponsor.emoji} {sponsor.name}</span>}
       <button className="chip" onClick={toggleMute} style={{ marginLeft: "auto", cursor: "pointer", color: "var(--text)" }}>{muted ? "🔇" : "🔊"}</button>
     </div>
   );
@@ -323,7 +338,7 @@ export default function CareerMode() {
         {HUD}
         <div className="card" style={{ padding: "1rem", display: "grid", gap: 10 }}>
           <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <strong>🔧 Development — ${UPGRADE_COST}m per +{UPGRADE_STEP}</strong>
+            <strong>🔧 Development — ${upCost}m per +{UPGRADE_STEP}</strong>
             <span style={{ color: "var(--muted)" }}>Car rating {playerCar()}</span>
           </div>
           {CATS.map((c) => (
@@ -333,7 +348,7 @@ export default function CareerMode() {
                 <div style={{ width: `${build[c.key]}%`, height: "100%", background: "var(--accent)" }} />
               </div>
               <span style={{ fontFamily: "var(--font-cond)", width: 30, textAlign: "right" }}>{build[c.key]}</span>
-              <button className="btn" disabled={money < UPGRADE_COST || build[c.key] >= 100} onClick={() => buy(c.key)} style={{ minHeight: 34, padding: "0.2rem 0.6rem" }}>+{UPGRADE_STEP}</button>
+              <button className="btn" disabled={money < upCost || build[c.key] >= 100} onClick={() => buy(c.key)} style={{ minHeight: 34, padding: "0.2rem 0.6rem" }}>+{UPGRADE_STEP}</button>
             </div>
           ))}
         </div>

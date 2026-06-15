@@ -182,8 +182,11 @@ export default async function DriverPage({
                 <th>Pos</th>
                 <th>Wins</th>
                 <th>Poles</th>
+                <th>Pod.</th>
                 <th>Points</th>
-                <th>OVR</th>
+                <th title="Average finishing position">Avg</th>
+                <th title="Race head-to-head vs team-mate">vs Mate</th>
+                <th title="Season rating used by the games">OVR</th>
               </tr>
             </thead>
             <tbody>
@@ -205,10 +208,17 @@ export default async function DriverPage({
                   </td>
                   <td style={{ fontFamily: "var(--font-mono)" }}>{s.wins}</td>
                   <td style={{ fontFamily: "var(--font-mono)" }}>{s.poles}</td>
+                  <td style={{ fontFamily: "var(--font-mono)" }}>{s.podiums}</td>
                   <td style={{ fontFamily: "var(--font-mono)", color: "var(--gold)" }}>
                     {s.points}
                   </td>
                   <td style={{ fontFamily: "var(--font-mono)", color: "var(--muted)" }}>
+                    {s.avgFinish != null ? `P${s.avgFinish}` : "—"}
+                  </td>
+                  <td style={{ fontFamily: "var(--font-mono)", color: "var(--accent-2)" }}>
+                    {s.tmR ?? "—"}
+                  </td>
+                  <td style={{ fontFamily: "var(--font-cond)", color: "var(--gold)", fontSize: "1rem" }}>
                     {s.rating}
                   </td>
                 </tr>

@@ -3,7 +3,15 @@ import { useEffect, useRef, useState } from "react";
 import type { SeasonPick, CarPick } from "@/lib/games-data";
 import { tick, settle, tap } from "@/lib/sound";
 
-export interface Sponsor { name: string; emoji: string; blurb: string; value: number }
+export interface SponsorEffects {
+  loyal?: boolean;          // Career: immune to "sponsor walks" events
+  volatile?: boolean;       // Career: extra chance of bad money events
+  winBonus?: number;        // Career: +$m per race win
+  devDiscount?: number;     // Career: upgrade cost reduced by N
+  pressure?: number;        // Career: −$m on a pointless race
+  techPartner?: { cat: "chassis" | "engine" | "aero" | "reliability"; amount: number }; // both: +car stat at start
+}
+export interface Sponsor { name: string; emoji: string; blurb: string; value: number; pro: string; con: string; effects?: SponsorEffects }
 export interface EngTeam { name: string; emoji: string; blurb: string; mod: { chassis: number; engine: number; aero: number; reliability: number } }
 
 export function sample<T>(arr: T[], n: number, exclude: (x: T) => boolean = () => false): T[] {
@@ -56,7 +64,14 @@ export function DriverSpin({ pool, exclude, onPick, which }: { pool: SeasonPick[
             ) : <div style={{ width: 50, height: 50, borderRadius: 10, background: "var(--panel-2)", display: "grid", placeItems: "center", margin: "0 auto", fontFamily: "var(--font-cond)" }}>{p.code}</div>}
             <div style={{ fontWeight: 800, marginTop: 6, fontSize: ".86rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.flag} {p.name}</div>
             <div style={{ color: "var(--muted)", fontSize: ".72rem" }}>{p.year} · {p.team}</div>
-            <div style={{ fontFamily: "var(--font-cond)", color: "var(--gold)", marginTop: 4 }}>OVR {p.rating} <span style={{ color: "var(--muted)", fontSize: ".72rem" }}>· {p.wins}W</span></div>
+            <div style={{ fontFamily: "var(--font-cond)", color: "var(--gold)", marginTop: 4, fontSize: "1.1rem" }}>OVR {p.rating}</div>
+            <div style={{ display: "flex", justifyContent: "center", gap: 7, marginTop: 4, fontSize: ".68rem", color: "var(--muted)", flexWrap: "wrap" }}>
+              <span title="Championship position">P{p.position}</span>
+              <span title="Wins">🏆{p.wins}</span>
+              <span title="Podiums">🥂{p.podiums}</span>
+              {p.avgFinish != null && <span title="Average finish">avg P{p.avgFinish}</span>}
+            </div>
+            {p.tmR && <div style={{ fontSize: ".66rem", color: "var(--accent-2)", marginTop: 2 }} title="Race head-to-head vs team-mate">vs mate {p.tmR}</div>}
           </button>
         ))}
       </div>
@@ -127,8 +142,9 @@ export function SponsorSpin({ sponsors, onPick, unit }: { sponsors: Sponsor[]; o
             style={{ padding: "1rem", textAlign: "left", cursor: phase === "done" ? "pointer" : "default", color: "var(--text)", opacity: phase === "spinning" ? 0.55 : 1, borderTop: "3px solid var(--gold)" }}>
             <div style={{ fontSize: "1.6rem" }}>{s.emoji}</div>
             <div style={{ fontWeight: 800 }}>{s.name}</div>
-            <div style={{ color: "var(--muted)", fontSize: ".78rem", minHeight: 32 }}>{s.blurb}</div>
-            <div style={{ fontFamily: "var(--font-cond)", color: "var(--gold)", marginTop: 6, fontSize: "1.1rem" }}>💵 {s.value} {unit}</div>
+            <div style={{ fontFamily: "var(--font-cond)", color: "var(--gold)", margin: "4px 0", fontSize: "1.1rem" }}>💵 {s.value} {unit}</div>
+            <div style={{ color: "var(--accent-2)", fontSize: ".72rem" }}>✓ {s.pro}</div>
+            <div style={{ color: "var(--danger)", fontSize: ".72rem" }}>✗ {s.con}</div>
           </button>
         ))}
       </div>
