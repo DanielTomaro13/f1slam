@@ -9,6 +9,7 @@ const SITES = [
   { key: "nba", label: "NBA 82-0", href: "https://nba82-0.com" },
   { key: "mlb", label: "MLB 162-0", href: "https://mlb162-0.com" },
   { key: "football", label: "Football Invincibles", href: "https://footballinvincibles.com" },
+  { key: "tennis", label: "Tennis Slam", href: "https://grandtennisslam.com" },
 ];
 
 export default function SisterSites({ active }: { active: string }) {
