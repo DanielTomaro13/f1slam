@@ -21,6 +21,7 @@ export default function SiteFooter() {
             <a href="https://afl23-0.com" style={{ color: "var(--accent)" }}>AFL 23-0</a> ·{" "}
             <a href="https://nrl24-0.com" style={{ color: "var(--accent)" }}>NRL 24-0</a> ·{" "}
             <a href="https://nba82-0.com" style={{ color: "var(--accent)" }}>NBA 82-0</a> ·{" "}
+            <a href="https://nbl33-0.com" style={{ color: "var(--accent)" }}>NBL 33-0</a> ·{" "}
             <a href="https://mlb162-0.com" style={{ color: "var(--accent)" }}>MLB 162-0</a> ·{" "}
             <a href="https://footballinvincibles.com" style={{ color: "var(--accent)" }}>Football Invincibles</a> ·{" "}
             <a href="https://grandtennisslam.com" style={{ color: "var(--accent)" }}>Tennis Slam</a>
