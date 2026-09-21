@@ -2,6 +2,8 @@
 
 > **Status, September 2026:** GitHub Actions are currently paused on this repo, so automated data refreshes and deploys are not running. The data and any live site reflect the last build.
 
+[![Screenshot of the live site](.github/screenshot.png)](https://f1slam.com/)
+
 **[f1slam.com](https://f1slam.com)** — Formula 1 stats, championship standings,
 the race calendar and a vault of free F1 mini-games. Chase the perfect **Grand Slam**.
 
