@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import "./globals.css";
 import SisterSites from "@/components/SisterSites";
+import MarketMoverPopup from "@/components/MarketMoverPopup";
 import SiteHeader from "@/components/SiteHeader";
 import SiteFooter from "@/components/SiteFooter";
 import JsonLd from "@/components/JsonLd";
@@ -99,6 +100,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <SisterSites active="f1" />
+        <MarketMoverPopup />
         <SiteHeader />
         <main className="container-x" style={{ paddingTop: "1.5rem", minHeight: "60vh" }}>
           {children}

@@ -1,8 +1,10 @@
+import { MARKETMOVER_MARK, marketMoverHref } from "@/lib/marketmover";
+
 /**
  * Cross-site strip linking every project in the 0 Series. The same bar lives at
  * the top of each sister site so they all point at one another.
  */
-const SITES = [
+const SITES: { key: string; label: string; href: string; logo?: string }[] = [
   { key: "f1", label: "F1Slam", href: "https://f1slam.com" },
   { key: "afl", label: "AFL 23-0", href: "https://afl23-0.com" },
   { key: "nrl", label: "NRL 24-0", href: "https://nrl24-0.com" },
@@ -11,6 +13,7 @@ const SITES = [
   { key: "mlb", label: "MLB 162-0", href: "https://mlb162-0.com" },
   { key: "football", label: "Football Invincibles", href: "https://footballinvincibles.com" },
   { key: "tennis", label: "Tennis Slam", href: "https://grandtennisslam.com" },
+  { key: "marketmover", label: "MarketMover", href: marketMoverHref("sister_bar"), logo: MARKETMOVER_MARK },
 ];
 
 export default function SisterSites({ active }: { active: string }) {
@@ -24,7 +27,10 @@ export default function SisterSites({ active }: { active: string }) {
           s.key === active ? (
             <span key={s.key} className="sister-link" data-active="true" aria-current="page">{s.label}</span>
           ) : (
-            <a key={s.key} className="sister-link" href={s.href}>{s.label}</a>
+            <a key={s.key} className="sister-link" href={s.href}>
+              {s.logo ? <img src={s.logo} alt="" width={14} height={14} className="sister-mark" /> : null}
+              {s.label}
+            </a>
           )
         )}
       </div>
