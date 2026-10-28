@@ -1,0 +1,1 @@
+self.__SSG_MANIFEST=new Set(["\u002Fdrivers\u002F[id]","\u002Fraces\u002F[season]\u002F[round]","\u002Ftracks\u002F[key]"]);self.__SSG_MANIFEST_CB&&self.__SSG_MANIFEST_CB()

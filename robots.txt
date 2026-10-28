@@ -1,0 +1,5 @@
+User-Agent: *
+Allow: /
+
+Host: https://f1slam.com
+Sitemap: https://f1slam.com/sitemap.xml
